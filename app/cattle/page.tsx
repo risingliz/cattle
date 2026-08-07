@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
-import { GrowthStageBadge } from "@/components/cattle/GrowthStageBadge";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { primaryButtonClass } from "@/components/ui/classes";
-import { formatDate, formatMonthsAndDays, formatKRW, getManagementNumber, getGrowthStage } from "@/lib/format";
+import { formatKRW, getManagementNumber } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import { addMonths, calcMonthsBetween } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
@@ -126,10 +124,7 @@ export default async function CattleListPage({
                 <tr className="text-left text-black/60 dark:text-white/60">
                   <th className="pb-2 pr-4">관리번호</th>
                   <th className="pb-2 pr-4">우방</th>
-                  <th className="pb-2 pr-4">상태</th>
-                  <th className="pb-2 pr-4">입식일</th>
                   <th className="pb-2 pr-4">월령</th>
-                  <th className="pb-2 pr-4">사육일수</th>
                   <th className="pb-2">누적 투자비용</th>
                 </tr>
               </thead>
@@ -145,23 +140,7 @@ export default async function CattleListPage({
                     <td className="py-2 pr-4">
                       {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "-") : "-"}
                     </td>
-                    <td className="py-2 pr-4">
-                      <StatusBadge status={cattle.status} />
-                    </td>
-                    <td className="py-2 pr-4">{formatDate(cattle.intake_date)}</td>
-                    <td className="py-2 pr-4">
-                      {ageMonths != null ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          {ageMonths}개월
-                          <GrowthStageBadge stage={getGrowthStage(ageMonths)} />
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    <td className="py-2 pr-4">
-                      {formatMonthsAndDays(summary?.monthsHeld, summary?.daysHeld)}
-                    </td>
+                    <td className="py-2 pr-4">{ageMonths ?? "-"}</td>
                     <td className="py-2">{formatKRW(summary?.totalInvestment)}</td>
                   </tr>
                 ))}

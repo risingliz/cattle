@@ -1,11 +1,11 @@
 import { Card, StatTile } from "@/components/ui/Card";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { YearFilterForm } from "@/components/shipments/YearFilterForm";
-import { formatDate, formatMonthsAndDays, formatKRW, formatPercent } from "@/lib/format";
+import { formatDate, formatKRW, formatPercent } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import type { Cattle } from "@/lib/types";
+import type { ProfitabilitySummary } from "@/lib/calculations";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,26 @@ function exitDate(cattle: Cattle): string | null {
 function exitYear(cattle: Cattle): number | null {
   const date = exitDate(cattle);
   return date ? Number(date.slice(0, 4)) : null;
+}
+
+function gradeDisplay(cattle: Cattle): string {
+  if (!cattle.grade_nm) return "-";
+  if (cattle.grade_nm.startsWith("1++") && cattle.insfat != null) {
+    return `${cattle.grade_nm} (${cattle.insfat})`;
+  }
+  return cattle.grade_nm;
+}
+
+function ProfitCell({ summary }: { summary: ProfitabilitySummary | null | undefined }) {
+  if (!summary || summary.netProfit == null) return <span>-</span>;
+  const positive = summary.netProfit >= 0;
+  return (
+    <span className={positive ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
+      {formatKRW(summary.netProfit)}
+      {summary.usedEstimatedPrice && <span className="text-black/40 dark:text-white/40">(추정)</span>}
+      {summary.annualizedReturnPct != null && ` (${formatPercent(summary.annualizedReturnPct)})`}
+    </span>
+  );
 }
 
 export default async function ShipmentsPage({
@@ -128,13 +148,10 @@ export default async function ShipmentsPage({
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
                   <th className="pb-2 pr-4">관리번호</th>
-                  <th className="pb-2 pr-4">상태</th>
                   <th className="pb-2 pr-4">등급</th>
-                  <th className="pb-2 pr-4">종료일</th>
-                  <th className="pb-2 pr-4">사육일수</th>
-                  <th className="pb-2 pr-4">총투자비용</th>
-                  <th className="pb-2 pr-4">순수익</th>
-                  <th className="pb-2">연환산 수익률</th>
+                  <th className="pb-2 pr-4">도체중</th>
+                  <th className="pb-2 pr-4">출하일</th>
+                  <th className="pb-2">순수익(수익률)</th>
                 </tr>
               </thead>
               <tbody>
@@ -146,22 +163,14 @@ export default async function ShipmentsPage({
                     <td className="py-2 pr-4">
                       <TraceNoLink cattleId={cattle.id} traceNo={cattle.trace_no} />
                     </td>
+                    <td className="py-2 pr-4">{gradeDisplay(cattle)}</td>
                     <td className="py-2 pr-4">
-                      <StatusBadge status={cattle.status} />
+                      {cattle.carcass_weight != null ? `${cattle.carcass_weight}kg` : "-"}
                     </td>
-                    <td className="py-2 pr-4">{cattle.grade_nm ?? "-"}</td>
                     <td className="py-2 pr-4">{formatDate(exitDate(cattle))}</td>
-                    <td className="py-2 pr-4">
-                      {formatMonthsAndDays(summary?.monthsHeld, summary?.daysHeld)}
+                    <td className="py-2">
+                      <ProfitCell summary={summary} />
                     </td>
-                    <td className="py-2 pr-4">{formatKRW(summary?.totalInvestment)}</td>
-                    <td className="py-2 pr-4">
-                      {formatKRW(summary?.netProfit)}
-                      {summary?.usedEstimatedPrice && (
-                        <span className="ml-1 text-xs text-black/40 dark:text-white/40">(추정)</span>
-                      )}
-                    </td>
-                    <td className="py-2">{formatPercent(summary?.annualizedReturnPct)}</td>
                   </tr>
                 ))}
               </tbody>
