@@ -1,12 +1,32 @@
-import Link from "next/link";
 import { Card, StatTile } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { TraceNoLink } from "@/components/cattle/TraceNoLink";
+import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { YearFilterForm } from "@/components/shipments/YearFilterForm";
 import { formatDate, formatMonthsAndDays, formatKRW, formatPercent } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import type { Cattle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+const GRADE_ORDER = [
+  "1++A",
+  "1++B",
+  "1++C",
+  "1+A",
+  "1+B",
+  "1+C",
+  "1A",
+  "1B",
+  "1C",
+  "2A",
+  "2B",
+  "2C",
+  "3A",
+  "3B",
+  "3C",
+  "등외",
+];
 
 function exitDate(cattle: Cattle): string | null {
   return cattle.status === "폐사" ? cattle.death_date : cattle.shipment_date;
@@ -39,13 +59,26 @@ export default async function ShipmentsPage({
   const sorted = [...filtered].sort((a, b) => (exitDate(b.cattle) ?? "").localeCompare(exitDate(a.cattle) ?? ""));
 
   const shippedOnly = filtered.filter(({ cattle }) => cattle.status === "출하완료");
-  const deadOnly = filtered.filter(({ cattle }) => cattle.status === "폐사");
   const returns = shippedOnly
     .map(({ summary }) => summary?.annualizedReturnPct)
     .filter((v): v is number => v != null);
   const avgReturn = returns.length ? returns.reduce((a, b) => a + b, 0) / returns.length : null;
   const totalNetProfit = filtered.reduce((sum, { summary }) => sum + (summary?.netProfit ?? 0), 0);
   const hasEstimated = filtered.some(({ summary }) => summary?.usedEstimatedPrice);
+
+  const gradeCounts = new Map<string, number>();
+  for (const { cattle } of shippedOnly) {
+    const grade = cattle.grade_nm ?? "미확인";
+    gradeCounts.set(grade, (gradeCounts.get(grade) ?? 0) + 1);
+  }
+  const knownGrades = GRADE_ORDER.filter((g) => gradeCounts.has(g)).map((g) => ({
+    label: g,
+    value: gradeCounts.get(g) ?? 0,
+  }));
+  const otherGrades = Array.from(gradeCounts.entries())
+    .filter(([g]) => !GRADE_ORDER.includes(g))
+    .map(([label, value]) => ({ label, value }));
+  const gradeItems = [...knownGrades, ...otherGrades];
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,9 +87,8 @@ export default async function ShipmentsPage({
         <YearFilterForm years={years} selectedYear={selectedYear} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatTile label="출하완료" value={`${shippedOnly.length}두`} />
-        <StatTile label="폐사" value={`${deadOnly.length}두`} />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <StatTile label="출하 두수 (폐사 포함)" value={`${filtered.length}두`} />
         <StatTile
           label="평균 연환산 수익률 (출하완료)"
           value={
@@ -81,6 +113,12 @@ export default async function ShipmentsPage({
         </p>
       )}
 
+      {gradeItems.length > 0 && (
+        <Card title="등급별 분포 (출하완료)">
+          <HorizontalBarList items={gradeItems} />
+        </Card>
+      )}
+
       <Card>
         {sorted.length === 0 ? (
           <p className="text-sm text-black/60 dark:text-white/60">해당 조건의 개체가 없습니다.</p>
@@ -89,8 +127,9 @@ export default async function ShipmentsPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
-                  <th className="pb-2 pr-4">이력번호</th>
+                  <th className="pb-2 pr-4">관리번호</th>
                   <th className="pb-2 pr-4">상태</th>
+                  <th className="pb-2 pr-4">등급</th>
                   <th className="pb-2 pr-4">종료일</th>
                   <th className="pb-2 pr-4">사육일수</th>
                   <th className="pb-2 pr-4">총투자비용</th>
@@ -105,13 +144,12 @@ export default async function ShipmentsPage({
                     className="border-t border-black/5 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
                   >
                     <td className="py-2 pr-4">
-                      <Link href={`/cattle/${cattle.id}`} className="underline">
-                        {cattle.trace_no}
-                      </Link>
+                      <TraceNoLink cattleId={cattle.id} traceNo={cattle.trace_no} />
                     </td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={cattle.status} />
                     </td>
+                    <td className="py-2 pr-4">{cattle.grade_nm ?? "-"}</td>
                     <td className="py-2 pr-4">{formatDate(exitDate(cattle))}</td>
                     <td className="py-2 pr-4">
                       {formatMonthsAndDays(summary?.monthsHeld, summary?.daysHeld)}

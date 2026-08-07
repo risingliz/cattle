@@ -2,8 +2,9 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
+import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { dangerButtonClass } from "@/components/ui/classes";
-import { formatDate } from "@/lib/format";
+import { formatDate, getManagementNumber } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import { deleteCattle } from "@/app/cattle/actions";
 
@@ -18,7 +19,9 @@ export default async function DeleteCattlePage({
   const q = params.q?.trim() ?? "";
 
   const { items } = await getAllCattleWithProfitability();
-  const filtered = items.filter(({ cattle }) => !q || cattle.trace_no.includes(q));
+  const filtered = items.filter(
+    ({ cattle }) => !q || cattle.trace_no.includes(q) || getManagementNumber(cattle.trace_no).includes(q)
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,7 +35,7 @@ export default async function DeleteCattlePage({
           type="text"
           name="q"
           defaultValue={q}
-          placeholder="이력번호 검색"
+          placeholder="관리번호/이력번호 검색"
           className="rounded-md border border-black/15 bg-white px-3 py-1.5 text-sm dark:border-white/15 dark:bg-black/20"
         />
         <button
@@ -51,7 +54,7 @@ export default async function DeleteCattlePage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
-                  <th className="pb-2 pr-4">이력번호</th>
+                  <th className="pb-2 pr-4">관리번호</th>
                   <th className="pb-2 pr-4">상태</th>
                   <th className="pb-2 pr-4">입식일</th>
                   <th className="pb-2 pr-4">출하일</th>
@@ -66,9 +69,7 @@ export default async function DeleteCattlePage({
                     className="border-t border-black/5 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
                   >
                     <td className="py-2 pr-4">
-                      <Link href={`/cattle/${cattle.id}`} className="underline">
-                        {cattle.trace_no}
-                      </Link>
+                      <TraceNoLink cattleId={cattle.id} traceNo={cattle.trace_no} />
                     </td>
                     <td className="py-2 pr-4">
                       <StatusBadge status={cattle.status} />

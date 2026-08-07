@@ -25,3 +25,12 @@ export function formatMonthsAndDays(
   if (months == null || days == null || Number.isNaN(months) || Number.isNaN(days)) return "-";
   return `${months}개월 (${formatInt(days)}일)`;
 }
+
+/**
+ * 이력번호에서 관리번호(마지막 자리를 제외한 나머지의 끝 4자리)를 추출한다.
+ * 예: "002213948436" -> "4843" (마지막 "6"을 제외한 "00221394843"의 끝 4자리)
+ */
+export function getManagementNumber(traceNo: string): string {
+  const withoutLastChar = traceNo.slice(0, -1);
+  return withoutLastChar.slice(-4) || traceNo;
+}

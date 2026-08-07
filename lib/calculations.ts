@@ -46,6 +46,12 @@ export function calcMonthsBetween(startDate: Date, endDate: Date): number {
   return Math.max(months + 1, 0);
 }
 
+export function addMonths(date: Date, months: number): Date {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+}
+
 export interface ProfitabilitySummary {
   daysHeld: number;
   monthsHeld: number;

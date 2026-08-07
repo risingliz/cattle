@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { renamePen } from "@/app/settings/pens/actions";
 import { Card } from "@/components/ui/Card";
 import { inputClass, secondaryButtonClass } from "@/components/ui/classes";
+import { getManagementNumber } from "@/lib/format";
 import type { Cattle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export default async function PensSettingsPage() {
                   {assigned.map((c) => (
                     <li key={c.id}>
                       <Link href={`/cattle/${c.id}`} className="underline">
-                        {c.trace_no}
+                        {getManagementNumber(c.trace_no)}
                       </Link>
                     </li>
                   ))}

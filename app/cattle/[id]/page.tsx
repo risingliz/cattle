@@ -15,7 +15,7 @@ import {
   secondaryButtonClass,
   dangerButtonClass,
 } from "@/components/ui/classes";
-import { formatDate, formatKRW, formatInt } from "@/lib/format";
+import { formatDate, formatKRW, formatInt, getManagementNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +43,8 @@ export default async function CattleDetailPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">{cattle.trace_no}</h1>
+          <h1 className="text-xl font-semibold">{getManagementNumber(cattle.trace_no)}</h1>
+          <span className="text-sm text-black/40 dark:text-white/40">{cattle.trace_no}</span>
           <StatusBadge status={cattle.status} />
         </div>
         <div className="flex items-center gap-2">
