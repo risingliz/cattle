@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/Card";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
+import { InlineBar } from "@/components/ui/InlineBar";
 import { formatKRW, formatInt } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import { calcYearlyCashFlow, calcMonthlyInBarnInvestment } from "@/lib/calculations";
@@ -25,6 +26,7 @@ export default async function CashFlowPage() {
     INVESTMENT_TREND_START,
     today
   );
+  const maxMonthlyInvestment = Math.max(1, ...monthlyInvestment.map((m) => m.totalInvestment));
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,34 +95,30 @@ export default async function CashFlowPage() {
         {monthlyInvestment.length === 0 ? (
           <p className="text-sm text-black/60 dark:text-white/60">해당 기간 데이터가 없습니다.</p>
         ) : (
-          <>
-            <div className="mb-4">
-              <HorizontalBarList
-                items={monthlyInvestment.map((m) => ({ label: m.yearMonth, value: m.totalInvestment }))}
-                formatValue={formatKRW}
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-black/60 dark:text-white/60">
-                    <th className="pb-2 pr-4">월</th>
-                    <th className="pb-2 pr-4">사육 두수</th>
-                    <th className="pb-2">누적 투자비용</th>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-black/60 dark:text-white/60">
+                  <th className="pb-2 pr-4">월</th>
+                  <th className="pb-2 pr-4">투자 추이</th>
+                  <th className="pb-2 pr-4">사육 두수</th>
+                  <th className="pb-2">누적 투자비용</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyInvestment.map((m) => (
+                  <tr key={m.yearMonth} className="border-t border-black/5 dark:border-white/10">
+                    <td className="py-2 pr-4">{m.yearMonth}</td>
+                    <td className="py-2 pr-4">
+                      <InlineBar value={m.totalInvestment} max={maxMonthlyInvestment} />
+                    </td>
+                    <td className="py-2 pr-4">{formatInt(m.headCount)}두</td>
+                    <td className="py-2">{formatKRW(m.totalInvestment)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {monthlyInvestment.map((m) => (
-                    <tr key={m.yearMonth} className="border-t border-black/5 dark:border-white/10">
-                      <td className="py-2 pr-4">{m.yearMonth}</td>
-                      <td className="py-2 pr-4">{formatInt(m.headCount)}두</td>
-                      <td className="py-2">{formatKRW(m.totalInvestment)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
     </div>
