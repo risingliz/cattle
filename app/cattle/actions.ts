@@ -27,7 +27,9 @@ export async function createCattle(formData: FormData) {
   if (!traceNo) throw new Error("이력번호를 입력하세요.");
 
   const penId = optionalString(formData.get("penId"));
+  const intakeMethod = optionalString(formData.get("intakeMethod"));
   const intakePrice = optionalNumber(formData.get("intakePrice"));
+  const intakeWeight = optionalNumber(formData.get("intakeWeight"));
   const memo = optionalString(formData.get("memo"));
 
   const supabase = getSupabaseServerClient();
@@ -36,7 +38,9 @@ export async function createCattle(formData: FormData) {
     .insert({
       trace_no: traceNo,
       pen_id: penId ?? null,
+      intake_method: intakeMethod ?? null,
       intake_price: intakePrice ?? null,
+      intake_weight: intakeWeight ?? null,
       memo: memo ?? null,
     })
     .select("id")
@@ -61,7 +65,9 @@ export async function createCattle(formData: FormData) {
 
 export async function updateCattle(cattleId: string, formData: FormData) {
   const penId = optionalString(formData.get("penId"));
+  const intakeMethod = optionalString(formData.get("intakeMethod"));
   const intakePrice = optionalNumber(formData.get("intakePrice"));
+  const intakeWeight = optionalNumber(formData.get("intakeWeight"));
   const shipmentPrice = optionalNumber(formData.get("shipmentPrice"));
   const memo = optionalString(formData.get("memo"));
 
@@ -70,7 +76,9 @@ export async function updateCattle(cattleId: string, formData: FormData) {
     .from("cattle")
     .update({
       pen_id: penId ?? null,
+      intake_method: intakeMethod ?? null,
       intake_price: intakePrice ?? null,
+      intake_weight: intakeWeight ?? null,
       shipment_price: shipmentPrice ?? null,
       memo: memo ?? null,
     })

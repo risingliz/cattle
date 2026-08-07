@@ -28,8 +28,19 @@ export default async function NewCattlePage() {
           </select>
         </div>
         <div>
+          <label className={labelClass}>입식 방식</label>
+          <select name="intakeMethod" className={inputClass} defaultValue="경매">
+            <option value="경매">경매</option>
+            <option value="직거래">직거래</option>
+          </select>
+        </div>
+        <div>
           <label className={labelClass}>입식 가격 (원)</label>
           <input name="intakePrice" type="number" min="0" step="1" className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>입식 체중 (kg, 선택)</label>
+          <input name="intakeWeight" type="number" min="0" step="0.1" className={inputClass} />
         </div>
         <div>
           <label className={labelClass}>메모</label>

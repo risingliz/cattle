@@ -1,4 +1,5 @@
 export type CattleStatus = "사육중" | "출하완료" | "폐사";
+export type IntakeMethod = "경매" | "직거래";
 
 export interface Pen {
   id: string;
@@ -25,6 +26,8 @@ export interface Cattle {
   shipment_date: string | null;
   death_date: string | null;
 
+  intake_method: IntakeMethod | null;
+  intake_weight: number | null;
   intake_price: number | null;
   shipment_price: number | null;
   /** 출하가격 미입력 시 음성공판장 등급별 낙찰가 기준 추정값 */

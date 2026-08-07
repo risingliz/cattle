@@ -88,12 +88,31 @@ export default async function CattleDetailPage({
             </select>
           </div>
           <div>
+            <label className={labelClass}>입식 방식</label>
+            <select name="intakeMethod" defaultValue={cattle.intake_method ?? ""} className={inputClass}>
+              <option value="">미지정</option>
+              <option value="경매">경매</option>
+              <option value="직거래">직거래</option>
+            </select>
+          </div>
+          <div>
             <label className={labelClass}>입식 가격 (원)</label>
             <input
               name="intakePrice"
               type="number"
               min="0"
               defaultValue={cattle.intake_price ?? ""}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>입식 체중 (kg)</label>
+            <input
+              name="intakeWeight"
+              type="number"
+              min="0"
+              step="0.1"
+              defaultValue={cattle.intake_weight ?? ""}
               className={inputClass}
             />
           </div>
