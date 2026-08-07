@@ -205,3 +205,60 @@ export function calcYearlyCashFlow(
 
   return Array.from(byYear.values()).sort((a, b) => b.year - a.year);
 }
+
+export interface MonthlyInBarnInvestment {
+  yearMonth: string;
+  totalInvestment: number;
+  headCount: number;
+}
+
+/**
+ * 매월 1일 시점 기준, 그때 사육장에 있던(입식했고 아직 출하/폐사 전인) 개체들의
+ * 누적 투자비용(입식가격 + 그 시점까지의 사료비 + 그 시점까지의 기타비용) 합계를 계산한다.
+ * 실시간 투자비 흐름(늘어나는 추세)을 보기 위한 스톡(잔액) 지표 — calcYearlyCashFlow(흐름 지표)와는 다른 개념.
+ */
+export function calcMonthlyInBarnInvestment(
+  cattleList: Cattle[],
+  extraCostsByCattleId: Map<string, ExtraCost[]>,
+  feedCostPeriods: FeedCostPeriod[],
+  startDate: Date,
+  endDate: Date
+): MonthlyInBarnInvestment[] {
+  const results: MonthlyInBarnInvestment[] = [];
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  while (cursor <= last) {
+    const snapshotDate = cursor;
+    let totalInvestment = 0;
+    let headCount = 0;
+
+    for (const cattle of cattleList) {
+      if (!cattle.intake_date || cattle.intake_price == null) continue;
+      const intakeDate = new Date(cattle.intake_date);
+      if (intakeDate > snapshotDate) continue;
+
+      const exitDateStr =
+        cattle.status === "출하완료" ? cattle.shipment_date : cattle.status === "폐사" ? cattle.death_date : null;
+      if (exitDateStr && new Date(exitDateStr) <= snapshotDate) continue;
+
+      const feedCost = calcFeedCost(intakeDate, snapshotDate, feedCostPeriods);
+      const extraCostAsOf = (extraCostsByCattleId.get(cattle.id) ?? [])
+        .filter((ec) => new Date(ec.cost_date) <= snapshotDate)
+        .reduce((sum, ec) => sum + ec.amount, 0);
+
+      totalInvestment += cattle.intake_price + feedCost + extraCostAsOf;
+      headCount += 1;
+    }
+
+    results.push({
+      yearMonth: `${snapshotDate.getFullYear()}.${String(snapshotDate.getMonth() + 1).padStart(2, "0")}`,
+      totalInvestment,
+      headCount,
+    });
+
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+
+  return results;
+}

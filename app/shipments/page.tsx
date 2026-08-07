@@ -5,7 +5,7 @@ import { YearFilterForm } from "@/components/shipments/YearFilterForm";
 import { formatDate, formatKRW, formatPercent } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import type { Cattle } from "@/lib/types";
-import { calcYearlyCashFlow, type ProfitabilitySummary } from "@/lib/calculations";
+import type { ProfitabilitySummary } from "@/lib/calculations";
 
 export const dynamic = "force-dynamic";
 
@@ -63,14 +63,7 @@ export default async function ShipmentsPage({
   searchParams: Promise<{ year?: string }>;
 }) {
   const params = await searchParams;
-  const { items, extraByCattle, feedCostPeriods } = await getAllCattleWithProfitability();
-
-  const yearlyCashFlow = calcYearlyCashFlow(
-    items.map((i) => i.cattle),
-    extraByCattle,
-    feedCostPeriods,
-    new Date()
-  );
+  const { items } = await getAllCattleWithProfitability();
 
   const exited = items.filter(({ cattle }) => cattle.status === "출하완료" || cattle.status === "폐사");
 
@@ -113,59 +106,6 @@ export default async function ShipmentsPage({
         <h1 className="text-lg font-semibold">출하 목록</h1>
         <YearFilterForm years={years} selectedYear={selectedYear} />
       </div>
-
-      {yearlyCashFlow.length > 0 && (
-        <Card
-          title="연도별 현금흐름"
-          className="border-l-4 border-l-black/20 dark:border-l-white/20"
-        >
-          <p className="mb-4 text-xs text-black/50 dark:text-white/50">
-            그 해에 실제로 오간 돈 기준입니다 (사육중 개체의 사료비도 해당 연도만큼 포함, 출하 여부와 무관).
-          </p>
-          <div className="mb-4">
-            <HorizontalBarList
-              items={yearlyCashFlow.map((y) => ({ label: `${y.year}년`, value: y.netCashFlow }))}
-              formatValue={formatKRW}
-            />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-black/60 dark:text-white/60">
-                  <th className="pb-2 pr-4">연도</th>
-                  <th className="pb-2 pr-4">입식비용</th>
-                  <th className="pb-2 pr-4">사육비</th>
-                  <th className="pb-2 pr-4">기타비용</th>
-                  <th className="pb-2 pr-4">출하대금</th>
-                  <th className="pb-2">순현금흐름</th>
-                </tr>
-              </thead>
-              <tbody>
-                {yearlyCashFlow.map((y) => (
-                  <tr key={y.year} className="border-t border-black/5 dark:border-white/10">
-                    <td className="py-2 pr-4">{y.year}년</td>
-                    <td className="py-2 pr-4">{formatKRW(y.intakeCost)}</td>
-                    <td className="py-2 pr-4">{formatKRW(y.feedCost)}</td>
-                    <td className="py-2 pr-4">{formatKRW(y.extraCost)}</td>
-                    <td className="py-2 pr-4">{formatKRW(y.shipmentRevenue)}</td>
-                    <td className="py-2">
-                      <span
-                        className={
-                          y.netCashFlow >= 0
-                            ? "text-green-600 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
-                        }
-                      >
-                        {formatKRW(y.netCashFlow)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <StatTile label="출하 두수 (폐사 포함)" value={`${filtered.length}두`} />
