@@ -1,6 +1,6 @@
 import { getSupabaseServerClient } from "./supabase/server";
 import { calcCattleProfitability, type ProfitabilitySummary } from "./calculations";
-import type { Cattle, ExtraCost, Pen } from "./types";
+import type { Cattle, ExtraCost, FeedCostPeriod, Pen } from "./types";
 
 export interface CattleWithSummary {
   cattle: Cattle;
@@ -11,6 +11,8 @@ export interface CattleWithSummary {
 export async function getAllCattleWithProfitability(): Promise<{
   items: CattleWithSummary[];
   pens: Pen[];
+  extraByCattle: Map<string, ExtraCost[]>;
+  feedCostPeriods: FeedCostPeriod[];
 }> {
   const supabase = getSupabaseServerClient();
 
@@ -43,5 +45,5 @@ export async function getAllCattleWithProfitability(): Promise<{
     summary: calcCattleProfitability(c, extraByCattle.get(c.id) ?? [], periods),
   }));
 
-  return { items, pens };
+  return { items, pens, extraByCattle, feedCostPeriods: periods };
 }

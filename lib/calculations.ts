@@ -125,3 +125,83 @@ export function calcCattleProfitability(
     usedEstimatedPrice,
   };
 }
+
+export interface YearlyCashFlow {
+  year: number;
+  intakeCost: number;
+  feedCost: number;
+  extraCost: number;
+  shipmentRevenue: number;
+  /** 출하대금 수입 - (입식비용 + 사육비 + 기타비용) */
+  netCashFlow: number;
+}
+
+/**
+ * 연도별 실제 현금흐름을 계산한다 (개체의 출하 여부와 무관하게, 그 해에 실제로 오간 돈 기준).
+ * - 입식비용: intake_date가 속한 연도에 전액 반영
+ * - 사육비: intake_date ~ (출하일/폐사일/오늘) 구간을 연도 경계로 잘라, 각 연도 조각만큼만 반영 (사육중 개체도 포함)
+ * - 기타비용: cost_date가 속한 연도에 반영
+ * - 출하대금: shipment_date가 속한 연도에 (shipment_price ?? estimated_shipment_price) 반영 (폐사는 수익 없음)
+ */
+export function calcYearlyCashFlow(
+  cattleList: Cattle[],
+  extraCostsByCattleId: Map<string, ExtraCost[]>,
+  feedCostPeriods: FeedCostPeriod[],
+  today: Date
+): YearlyCashFlow[] {
+  const byYear = new Map<number, YearlyCashFlow>();
+
+  function bucket(year: number): YearlyCashFlow {
+    let entry = byYear.get(year);
+    if (!entry) {
+      entry = { year, intakeCost: 0, feedCost: 0, extraCost: 0, shipmentRevenue: 0, netCashFlow: 0 };
+      byYear.set(year, entry);
+    }
+    return entry;
+  }
+
+  for (const cattle of cattleList) {
+    if (!cattle.intake_date) continue;
+    const intakeDate = new Date(cattle.intake_date);
+
+    if (cattle.intake_price != null) {
+      bucket(intakeDate.getFullYear()).intakeCost += cattle.intake_price;
+    }
+
+    const exitDateStr =
+      cattle.status === "출하완료"
+        ? cattle.shipment_date
+        : cattle.status === "폐사"
+          ? cattle.death_date
+          : today.toISOString().slice(0, 10);
+    const exitDate = exitDateStr ? new Date(exitDateStr) : today;
+
+    const startYear = intakeDate.getFullYear();
+    const endYear = exitDate.getFullYear();
+    for (let y = startYear; y <= endYear; y++) {
+      const yearStart = new Date(y, 0, 1);
+      const yearEndExclusive = new Date(y + 1, 0, 1);
+      const overlapStart = intakeDate > yearStart ? intakeDate : yearStart;
+      const overlapEnd = exitDate < yearEndExclusive ? exitDate : yearEndExclusive;
+      const feedInYear = calcFeedCost(overlapStart, overlapEnd, feedCostPeriods);
+      if (feedInYear > 0) bucket(y).feedCost += feedInYear;
+    }
+
+    for (const ec of extraCostsByCattleId.get(cattle.id) ?? []) {
+      bucket(new Date(ec.cost_date).getFullYear()).extraCost += ec.amount;
+    }
+
+    if (cattle.status === "출하완료" && cattle.shipment_date) {
+      const price = cattle.shipment_price ?? cattle.estimated_shipment_price;
+      if (price != null) {
+        bucket(new Date(cattle.shipment_date).getFullYear()).shipmentRevenue += price;
+      }
+    }
+  }
+
+  for (const entry of byYear.values()) {
+    entry.netCashFlow = entry.shipmentRevenue - (entry.intakeCost + entry.feedCost + entry.extraCost);
+  }
+
+  return Array.from(byYear.values()).sort((a, b) => b.year - a.year);
+}
