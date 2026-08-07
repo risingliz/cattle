@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LINKS = [
-  { href: "/", label: "대시보드" },
   { href: "/cattle", label: "사육 목록" },
   { href: "/shipments", label: "출하 목록" },
   { href: "/cashflow", label: "현금흐름" },
@@ -19,7 +18,7 @@ export function NavBar() {
     <header className="border-b border-black/10 bg-white dark:border-white/10 dark:bg-black">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-6">
-          <Link href="/" className="text-sm font-bold">
+          <Link href="/cattle" className="text-sm font-bold">
             한우 비육 관리
           </Link>
           <nav className="flex gap-4 text-sm text-black/70 dark:text-white/70">
