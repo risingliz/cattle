@@ -2,17 +2,17 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
+import { GrowthStageBadge } from "@/components/cattle/GrowthStageBadge";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { primaryButtonClass } from "@/components/ui/classes";
-import { formatDate, formatMonthsAndDays, formatKRW, getManagementNumber } from "@/lib/format";
+import { formatDate, formatMonthsAndDays, formatKRW, getManagementNumber, getGrowthStage } from "@/lib/format";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import { addMonths, calcMonthsBetween } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-// 입식 -> 약 30개월령 출하가 기준이므로, 29개월부터 출하예정으로 안내한다.
-const READY_AGE_MONTHS = 29;
+// 입식 -> 약 30개월령 출하가 기준
 const SHIP_AGE_MONTHS = 30;
 const FLOW_MONTHS_AHEAD = 6;
 
@@ -153,11 +153,7 @@ export default async function CattleListPage({
                       {ageMonths != null ? (
                         <span className="inline-flex items-center gap-1.5">
                           {ageMonths}개월
-                          {ageMonths >= READY_AGE_MONTHS && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                              출하예정
-                            </span>
-                          )}
+                          <GrowthStageBadge stage={getGrowthStage(ageMonths)} />
                         </span>
                       ) : (
                         "-"

@@ -34,3 +34,13 @@ export function getManagementNumber(traceNo: string): string {
   const withoutLastChar = traceNo.slice(0, -1);
   return withoutLastChar.slice(-4) || traceNo;
 }
+
+export type GrowthStage = "육성비육" | "비육전기" | "비육후기" | "출하대기";
+
+/** 생후 월령 기준 사육 단계를 구분한다: ~13개월 육성비육, ~21개월 비육전기, ~28개월 비육후기, 29개월~ 출하대기. */
+export function getGrowthStage(ageMonths: number): GrowthStage {
+  if (ageMonths <= 13) return "육성비육";
+  if (ageMonths <= 21) return "비육전기";
+  if (ageMonths <= 28) return "비육후기";
+  return "출하대기";
+}
