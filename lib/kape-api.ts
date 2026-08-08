@@ -1,6 +1,6 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
-import { FARMER_NAME } from "./config";
+import { FARMER_NAMES } from "./config";
 
 const BASE_URL = "http://data.ekape.or.kr/openapi-data/service/user";
 const FETCH_TIMEOUT_MS = 15_000;
@@ -97,7 +97,7 @@ export async function fetchTraceInfo(traceNo: string): Promise<TraceInfo> {
   const birthItem = items.find((it) => it.infoType === "1");
   const intakeItem = items.find(
     (it) =>
-      it.infoType === "2" && it.farmerNm === FARMER_NAME && it.regType === "양수"
+      it.infoType === "2" && FARMER_NAMES.includes(it.farmerNm) && it.regType === "양수"
   );
   const shipmentItem = items.find(
     (it) => it.infoType === "2" && it.regType === "도축출하"
