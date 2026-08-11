@@ -95,9 +95,14 @@ export async function fetchTraceInfo(traceNo: string): Promise<TraceInfo> {
   const items = parsed.response?.body?.items?.item ?? [];
 
   const birthItem = items.find((it) => it.infoType === "1");
-  const intakeItem = items.find(
-    (it) =>
-      it.infoType === "2" && FARMER_NAMES.includes(it.farmerNm) && it.regType === "양수"
+
+  // 여러 농장주명 중 하나로 입식이 여러 번 잡힐 수 있어(예: 명의 이전), 가장 이른 양수일을 입식일로 본다.
+  const intakeItems = items.filter(
+    (it) => it.infoType === "2" && FARMER_NAMES.includes(it.farmerNm) && it.regType === "양수"
+  );
+  const intakeItem = intakeItems.reduce<(typeof intakeItems)[number] | undefined>(
+    (earliest, cur) => (!earliest || (cur.regYmd ?? "") < (earliest.regYmd ?? "") ? cur : earliest),
+    undefined
   );
   const shipmentItem = items.find(
     (it) => it.infoType === "2" && it.regType === "도축출하"
