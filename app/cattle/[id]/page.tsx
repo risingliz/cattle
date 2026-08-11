@@ -5,16 +5,11 @@ import { Card } from "@/components/ui/Card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SyncButton } from "@/components/cattle/SyncButton";
 import { ProfitSummaryCard } from "@/components/cattle/ProfitSummaryCard";
+import { CattleUpdateForm } from "@/components/cattle/CattleUpdateForm";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { FillInputButton } from "@/components/ui/FillInputButton";
-import { updateCattle, deleteCattle, addExtraCost, deleteExtraCost } from "@/app/cattle/actions";
-import {
-  inputClass,
-  labelClass,
-  primaryButtonClass,
-  secondaryButtonClass,
-  dangerButtonClass,
-} from "@/components/ui/classes";
+import { deleteCattle, addExtraCost, deleteExtraCost } from "@/app/cattle/actions";
+import { inputClass, labelClass, secondaryButtonClass, dangerButtonClass } from "@/components/ui/classes";
 import { formatDate, formatKRW, formatInt, getManagementNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -75,7 +70,7 @@ export default async function CattleDetailPage({
       </Card>
 
       <Card title="가격 / 우방 정보">
-        <form action={updateCattle.bind(null, cattle.id)} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <CattleUpdateForm cattleId={cattle.id}>
           <div>
             <label className={labelClass}>우방</label>
             <select name="penId" defaultValue={cattle.pen_id ?? ""} className={inputClass}>
@@ -146,12 +141,7 @@ export default async function CattleDetailPage({
             <label className={labelClass}>메모</label>
             <textarea name="memo" rows={2} defaultValue={cattle.memo ?? ""} className={inputClass} />
           </div>
-          <div className="sm:col-span-2">
-            <button type="submit" className={primaryButtonClass}>
-              저장
-            </button>
-          </div>
-        </form>
+        </CattleUpdateForm>
       </Card>
 
       {cattle.status === "출하완료" && (

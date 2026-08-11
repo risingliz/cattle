@@ -1,11 +1,12 @@
 import { Card, StatTile } from "@/components/ui/Card";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { YearFilterForm } from "@/components/shipments/YearFilterForm";
 import { formatDate, formatKRW, formatPercent } from "@/lib/format";
-import { getAllCattleWithProfitability } from "@/lib/queries";
+import { getAllCattleWithProfitability, type CattleWithSummary } from "@/lib/queries";
+import { calcMonthsBetween, type ProfitabilitySummary } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
-import type { ProfitabilitySummary } from "@/lib/calculations";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,13 @@ function exitYear(cattle: Cattle): number | null {
   return date ? Number(date.slice(0, 4)) : null;
 }
 
+function exitAgeMonths(cattle: Cattle): number | null {
+  if (!cattle.birth_date) return null;
+  const ed = exitDate(cattle);
+  if (!ed) return null;
+  return calcMonthsBetween(new Date(cattle.birth_date), new Date(ed));
+}
+
 function gradeDisplay(cattle: Cattle): string {
   if (!cattle.grade_nm) return "-";
   if (cattle.grade_nm.startsWith("1++") && cattle.insfat != null) {
@@ -57,10 +65,44 @@ function ProfitCell({ summary }: { summary: ProfitabilitySummary | null | undefi
   );
 }
 
+function sortExited(
+  rows: CattleWithSummary[],
+  sort: string | undefined,
+  dir: string | undefined
+): CattleWithSummary[] {
+  const factor = dir === "asc" ? 1 : -1;
+  const sorted = [...rows];
+
+  switch (sort) {
+    case "grade":
+      sorted.sort((a, b) => factor * (a.cattle.grade_nm ?? "").localeCompare(b.cattle.grade_nm ?? ""));
+      break;
+    case "weight":
+      sorted.sort(
+        (a, b) => factor * ((a.cattle.carcass_weight ?? -1) - (b.cattle.carcass_weight ?? -1))
+      );
+      break;
+    case "exitDate":
+      sorted.sort(
+        (a, b) => factor * ((exitDate(a.cattle) ?? "").localeCompare(exitDate(b.cattle) ?? ""))
+      );
+      break;
+    case "profit":
+      sorted.sort(
+        (a, b) => factor * ((a.summary?.netProfit ?? -Infinity) - (b.summary?.netProfit ?? -Infinity))
+      );
+      break;
+    default:
+      sorted.sort((a, b) => (exitDate(b.cattle) ?? "").localeCompare(exitDate(a.cattle) ?? ""));
+  }
+
+  return sorted;
+}
+
 export default async function ShipmentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; sort?: string; dir?: string }>;
 }) {
   const params = await searchParams;
   const { items } = await getAllCattleWithProfitability();
@@ -76,7 +118,7 @@ export default async function ShipmentsPage({
     ? exited.filter(({ cattle }) => exitYear(cattle) === selectedYear)
     : exited;
 
-  const sorted = [...filtered].sort((a, b) => (exitDate(b.cattle) ?? "").localeCompare(exitDate(a.cattle) ?? ""));
+  const sorted = sortExited(filtered, params.sort, params.dir);
 
   const shippedOnly = filtered.filter(({ cattle }) => cattle.status === "출하완료");
   const returns = shippedOnly
@@ -99,6 +141,8 @@ export default async function ShipmentsPage({
     .filter(([g]) => !GRADE_ORDER.includes(g))
     .map(([label, value]) => ({ label, value }));
   const gradeItems = [...knownGrades, ...otherGrades];
+
+  const sortParams = { year: selectedYear ? String(selectedYear) : undefined };
 
   return (
     <div className="flex flex-col gap-6">
@@ -148,31 +192,69 @@ export default async function ShipmentsPage({
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
                   <th className="pb-2 pr-4">관리번호</th>
-                  <th className="pb-2 pr-4">등급</th>
-                  <th className="pb-2 pr-4">도체중</th>
-                  <th className="pb-2 pr-4">출하일</th>
-                  <th className="pb-2">순수익(수익률)</th>
+                  <SortableTh
+                    label="등급"
+                    column="grade"
+                    basePath="/shipments"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
+                    label="도체중"
+                    column="weight"
+                    basePath="/shipments"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
+                    label="출하일"
+                    column="exitDate"
+                    basePath="/shipments"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
+                    label="순수익(수익률)"
+                    column="profit"
+                    basePath="/shipments"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2"
+                  />
                 </tr>
               </thead>
               <tbody>
-                {sorted.map(({ cattle, summary }) => (
-                  <tr
-                    key={cattle.id}
-                    className="border-t border-black/5 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
-                  >
-                    <td className="py-2 pr-4">
-                      <TraceNoLink cattleId={cattle.id} traceNo={cattle.trace_no} />
-                    </td>
-                    <td className="py-2 pr-4">{gradeDisplay(cattle)}</td>
-                    <td className="py-2 pr-4">
-                      {cattle.carcass_weight != null ? `${cattle.carcass_weight}kg` : "-"}
-                    </td>
-                    <td className="py-2 pr-4">{formatDate(exitDate(cattle))}</td>
-                    <td className="py-2">
-                      <ProfitCell summary={summary} />
-                    </td>
-                  </tr>
-                ))}
+                {sorted.map(({ cattle, summary }) => {
+                  const ageMonths = exitAgeMonths(cattle);
+                  return (
+                    <tr
+                      key={cattle.id}
+                      className="border-t border-black/5 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/5"
+                    >
+                      <td className="py-2 pr-4">
+                        <TraceNoLink cattleId={cattle.id} traceNo={cattle.trace_no} />
+                      </td>
+                      <td className="py-2 pr-4">{gradeDisplay(cattle)}</td>
+                      <td className="py-2 pr-4">
+                        {cattle.carcass_weight != null ? `${cattle.carcass_weight}kg` : "-"}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {formatDate(exitDate(cattle))}
+                        {ageMonths != null && ` (${ageMonths}개월)`}
+                      </td>
+                      <td className="py-2">
+                        <ProfitCell summary={summary} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

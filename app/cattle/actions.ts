@@ -63,7 +63,20 @@ export async function createCattle(formData: FormData) {
   redirect(`/cattle/${data.id}`);
 }
 
-export async function updateCattle(cattleId: string, formData: FormData) {
+export interface UpdateCattleState {
+  savedAt: number;
+}
+
+/**
+ * useActionState와 함께 쓰인다. cattleId만 bind된 상태로 폼 action에 연결하면
+ * 매 저장마다 새로운 savedAt을 반환해 폼을 강제로 다시 마운트할 수 있다
+ * (React가 저장 직후 uncontrolled 필드를 최초 defaultValue로 되돌리는 것을 방지).
+ */
+export async function updateCattle(
+  cattleId: string,
+  _prevState: UpdateCattleState | null,
+  formData: FormData
+): Promise<UpdateCattleState> {
   const penId = optionalString(formData.get("penId"));
   const intakeMethod = optionalString(formData.get("intakeMethod"));
   const intakePrice = optionalNumber(formData.get("intakePrice"));
@@ -88,7 +101,10 @@ export async function updateCattle(cattleId: string, formData: FormData) {
 
   revalidatePath(`/cattle/${cattleId}`);
   revalidatePath("/cattle");
+  revalidatePath("/shipments");
   revalidatePath("/");
+
+  return { savedAt: Date.now() };
 }
 
 /** redirectTo를 지정하면 삭제 후 해당 경로로 이동한다 (상세 페이지에서 자기 자신을 삭제한 경우 등). */

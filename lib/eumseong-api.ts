@@ -114,3 +114,89 @@ export async function fetchEumseongGradePricePerKg(
   const price = Number(raw);
   return Number.isFinite(price) ? price : null;
 }
+
+/**
+ * 음성공판장 등급 단일 평균 낙찰가(원/kg)를 조회한다 (근내지방도 세분화 없이, cattle 엔드포인트만 사용).
+ * 시세 추이처럼 특정 개체가 아니라 등급 자체의 시장 참고가를 볼 때 사용한다.
+ */
+export async function fetchGradeAveragePricePerKg(
+  gradeNm: string,
+  start: Date,
+  end: Date
+): Promise<number | null> {
+  const serviceKey = requireServiceKey();
+  const startYmd = ymd(start);
+  const endYmd = ymd(end);
+  const url = `${BASE_URL}/cattle?serviceKey=${serviceKey}&startYmd=${startYmd}&endYmd=${endYmd}&breedCd=${BREED_CD}&sexCd=${SEX_CD}&qgradeYn=N&defectIncludeYn=N`;
+
+  const parsed = await fetchXml(url);
+  assertSuccess(parsed, "음성공판장 등급 평균가 조회 실패");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = parsed?.response?.body?.items?.item ?? [];
+  const match = items.find((it) => it.gradeNm === gradeNm);
+
+  const raw = match?.c_0513Amt;
+  if (raw == null) return null;
+  const price = Number(raw);
+  return Number.isFinite(price) ? price : null;
+}
+
+/** 기준일 기준 몇 주 전(weeksAgo)의 화~금 구간을 계산한다. 0주 전은 "가장 최근에 끝난" 화~금 주. */
+export function getTueFriForWeeksAgo(referenceDate: Date, weeksAgo: number): { start: Date; end: Date } {
+  const day = referenceDate.getDay();
+  const isoDay = day === 0 ? 7 : day;
+  const thisMonday = new Date(referenceDate);
+  thisMonday.setDate(referenceDate.getDate() - (isoDay - 1));
+
+  const thisFriday = new Date(thisMonday);
+  thisFriday.setDate(thisMonday.getDate() + 4);
+
+  const baseMonday = new Date(thisMonday);
+  if (referenceDate < thisFriday) {
+    // 이번 주가 아직 금요일 전이면(거래 미완료) 지난 주를 0주 전으로 삼는다.
+    baseMonday.setDate(baseMonday.getDate() - 7);
+  }
+  baseMonday.setDate(baseMonday.getDate() - weeksAgo * 7);
+
+  const start = new Date(baseMonday);
+  start.setDate(baseMonday.getDate() + 1);
+  const end = new Date(baseMonday);
+  end.setDate(baseMonday.getDate() + 4);
+
+  return { start, end };
+}
+
+export interface WeeklyGradePrice {
+  weekStart: string;
+  weekEnd: string;
+  pricePerKg: number | null;
+}
+
+/** 최근 weeksBack주(가장 오래된 것부터)의 등급 평균 낙찰가(원/kg) 추이를 조회한다. */
+export async function fetchWeeklyGradePriceHistory(
+  gradeNm: string,
+  weeksBack: number,
+  referenceDate: Date
+): Promise<WeeklyGradePrice[]> {
+  const weekOffsets = Array.from({ length: weeksBack }, (_, i) => weeksBack - 1 - i);
+
+  const results = await Promise.all(
+    weekOffsets.map(async (weeksAgo) => {
+      const { start, end } = getTueFriForWeeksAgo(referenceDate, weeksAgo);
+      let pricePerKg: number | null = null;
+      try {
+        pricePerKg = await fetchGradeAveragePricePerKg(gradeNm, start, end);
+      } catch {
+        pricePerKg = null;
+      }
+      return {
+        weekStart: start.toISOString().slice(0, 10),
+        weekEnd: end.toISOString().slice(0, 10),
+        pricePerKg,
+      };
+    })
+  );
+
+  return results;
+}

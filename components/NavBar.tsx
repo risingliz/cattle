@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/cattle", label: "사육 목록" },
   { href: "/shipments", label: "출하 목록" },
   { href: "/cashflow", label: "현금흐름" },
+  { href: "/market-price", label: "시세" },
   { href: "/settings", label: "설정" },
 ];
 

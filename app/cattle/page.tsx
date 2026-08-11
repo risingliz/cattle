@@ -2,9 +2,10 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
+import { SortableTh } from "@/components/ui/SortableTh";
 import { primaryButtonClass } from "@/components/ui/classes";
 import { formatKRW, getManagementNumber } from "@/lib/format";
-import { getAllCattleWithProfitability } from "@/lib/queries";
+import { getAllCattleWithProfitability, type CattleWithSummary } from "@/lib/queries";
 import { addMonths, calcMonthsBetween } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
 
@@ -49,10 +50,46 @@ function buildShipmentFlow(cattleWithBirth: Cattle[], today: Date) {
   };
 }
 
+type ActiveRow = CattleWithSummary & { ageMonths: number | null };
+
+function sortActive(
+  rows: ActiveRow[],
+  sort: string | undefined,
+  dir: string | undefined,
+  penNameById: Map<string, string>
+): ActiveRow[] {
+  const factor = dir === "asc" ? 1 : -1;
+  const sorted = [...rows];
+
+  switch (sort) {
+    case "pen":
+      sorted.sort((a, b) => {
+        const an = a.cattle.pen_id ? (penNameById.get(a.cattle.pen_id) ?? "") : "";
+        const bn = b.cattle.pen_id ? (penNameById.get(b.cattle.pen_id) ?? "") : "";
+        return factor * an.localeCompare(bn);
+      });
+      break;
+    case "birth":
+      sorted.sort(
+        (a, b) => factor * (a.cattle.birth_date ?? "").localeCompare(b.cattle.birth_date ?? "")
+      );
+      break;
+    case "investment":
+      sorted.sort(
+        (a, b) => factor * ((a.summary?.totalInvestment ?? -1) - (b.summary?.totalInvestment ?? -1))
+      );
+      break;
+    default:
+      sorted.sort((a, b) => (b.ageMonths ?? -1) - (a.ageMonths ?? -1));
+  }
+
+  return sorted;
+}
+
 export default async function CattleListPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; sort?: string; dir?: string }>;
 }) {
   const params = await searchParams;
   const q = params.q?.trim() ?? "";
@@ -61,7 +98,7 @@ export default async function CattleListPage({
   const penNameById = new Map(pens.map((p) => [p.id, p.name]));
   const today = new Date();
 
-  const active = items
+  const filtered: ActiveRow[] = items
     .filter(({ cattle }) => {
       if (cattle.status !== "사육중") return false;
       if (q && !cattle.trace_no.includes(q) && !getManagementNumber(cattle.trace_no).includes(q))
@@ -72,8 +109,9 @@ export default async function CattleListPage({
       cattle,
       summary,
       ageMonths: cattle.birth_date ? calcMonthsBetween(new Date(cattle.birth_date), today) : null,
-    }))
-    .sort((a, b) => (b.ageMonths ?? -1) - (a.ageMonths ?? -1));
+    }));
+
+  const active = sortActive(filtered, params.sort, params.dir, penNameById);
 
   const flow = buildShipmentFlow(
     active.map((i) => i.cattle),
@@ -83,6 +121,8 @@ export default async function CattleListPage({
     { label: "출하시기 초과", value: flow.overdue, highlight: flow.overdue > 0 },
     ...flow.months.map((m, i) => ({ label: m.label, value: m.value, highlight: i === 0 && m.value > 0 })),
   ];
+
+  const sortParams = { q: q || undefined };
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,9 +163,33 @@ export default async function CattleListPage({
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
                   <th className="pb-2 pr-4">관리번호</th>
-                  <th className="pb-2 pr-4">우방</th>
-                  <th className="pb-2 pr-4">월령</th>
-                  <th className="pb-2">누적 투자비용</th>
+                  <SortableTh
+                    label="우방"
+                    column="pen"
+                    basePath="/cattle"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
+                    label="생년월일"
+                    column="birth"
+                    basePath="/cattle"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
+                    label="누적 투자비용"
+                    column="investment"
+                    basePath="/cattle"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2"
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -140,7 +204,9 @@ export default async function CattleListPage({
                     <td className="py-2 pr-4">
                       {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "-") : "-"}
                     </td>
-                    <td className="py-2 pr-4">{ageMonths ?? "-"}</td>
+                    <td className="py-2 pr-4">
+                      {cattle.birth_date ? `${cattle.birth_date} (${ageMonths}개월)` : "-"}
+                    </td>
                     <td className="py-2">{formatKRW(summary?.totalInvestment)}</td>
                   </tr>
                 ))}
