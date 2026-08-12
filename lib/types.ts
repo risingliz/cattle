@@ -4,6 +4,10 @@ export type IntakeMethod = "경매" | "직거래";
 export interface Pen {
   id: string;
   name: string;
+  /** 물리적 배치 구역 이름 (예: "4x2 구역"). 배치 미설정이면 null. */
+  layout_group: string | null;
+  layout_row: number | null;
+  layout_col: number | null;
   created_at: string;
 }
 

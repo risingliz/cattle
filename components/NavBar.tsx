@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/cattle", label: "사육 목록" },
+  { href: "/pens", label: "배치도" },
   { href: "/shipments", label: "출하 목록" },
   { href: "/cashflow", label: "현금흐름" },
   { href: "/market-price", label: "시세" },
