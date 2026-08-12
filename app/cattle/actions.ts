@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { fetchTraceInfo, fetchGradeInfo } from "@/lib/kape-api";
-import { fetchEumseongGradePricePerKg, getPreviousWeekTueFri } from "@/lib/eumseong-api";
+import { fetchEumseongGradePricePerKgWithFallback } from "@/lib/eumseong-api";
 import type { Cattle, CattleStatus } from "@/lib/types";
 
 function optionalNumber(v: FormDataEntryValue | null): number | undefined {
@@ -232,6 +232,7 @@ export async function syncCattleFromAPI(
   }
 
   // 출하가격이 아직 입력되지 않은 출하완료 개체는 음성공판장 등급별 낙찰가로 추정가를 계산한다.
+  // 직전 주에 거래가 없으면(연휴 등) 최대 4주 전까지 거슬러 올라가 가장 최근 유효 주 단가를 쓴다.
   const effectiveGradeNm = patch.grade_nm ?? cattle.grade_nm;
   const effectiveInsfat = patch.insfat ?? cattle.insfat;
   const effectiveCarcassWeight = patch.carcass_weight ?? cattle.carcass_weight;
@@ -247,12 +248,10 @@ export async function syncCattleFromAPI(
 
   if (needsEstimate && effectiveGradeNm && effectiveShipmentDate) {
     try {
-      const { start, end } = getPreviousWeekTueFri(new Date(effectiveShipmentDate));
-      const pricePerKg = await fetchEumseongGradePricePerKg(
+      const pricePerKg = await fetchEumseongGradePricePerKgWithFallback(
         effectiveGradeNm,
         effectiveInsfat,
-        start,
-        end
+        new Date(effectiveShipmentDate)
       );
       if (pricePerKg != null && effectiveCarcassWeight != null) {
         patch.estimated_price_per_kg = pricePerKg;

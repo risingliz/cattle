@@ -116,6 +116,37 @@ export async function fetchEumseongGradePricePerKg(
 }
 
 /**
+ * 출하일 직전 주부터 최대 maxWeeksBack주까지 거슬러 올라가며 등급별 낙찰가(원/kg)를 찾는다.
+ * 설·추석 연휴 등으로 직전 주에 음성공판장 거래가 아예 없는 경우(단가 null)를 위한 폴백이며,
+ * 가장 최근의 유효한 주 단가를 쓰기 위해 순차로 조회하고 값을 찾는 즉시 중단한다.
+ * (직전 주에 데이터가 있는 정상 케이스에서는 API를 1회만 호출한다.)
+ */
+export async function fetchEumseongGradePricePerKgWithFallback(
+  gradeNm: string,
+  insfat: number | null,
+  shipmentDate: Date,
+  maxWeeksBack = 4
+): Promise<number | null> {
+  const { start, end } = getPreviousWeekTueFri(shipmentDate);
+
+  for (let weeksBack = 0; weeksBack < maxWeeksBack; weeksBack++) {
+    const weekStart = new Date(start);
+    weekStart.setDate(start.getDate() - weeksBack * 7);
+    const weekEnd = new Date(end);
+    weekEnd.setDate(end.getDate() - weeksBack * 7);
+
+    try {
+      const pricePerKg = await fetchEumseongGradePricePerKg(gradeNm, insfat, weekStart, weekEnd);
+      if (pricePerKg != null) return pricePerKg;
+    } catch {
+      // 특정 주 조회 실패는 건너뛰고 그 이전 주로 계속 시도한다.
+    }
+  }
+
+  return null;
+}
+
+/**
  * 음성공판장 등급 단일 평균 낙찰가(원/kg)를 조회한다 (근내지방도 세분화 없이, cattle 엔드포인트만 사용).
  * 시세 추이처럼 특정 개체가 아니라 등급 자체의 시장 참고가를 볼 때 사용한다.
  */
