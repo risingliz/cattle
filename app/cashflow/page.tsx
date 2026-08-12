@@ -89,7 +89,7 @@ export default async function CashFlowPage() {
 
       <Card title="월별 사육장 투자비 현황 (2024년 1월~)">
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
-          매월 1일 기준, 그 시점에 사육장에 있던(출하·폐사 전) 개체들의 누적 투자비용 합계입니다.
+          매월 말일(이번 달은 오늘) 기준, 그 시점에 사육장에 있던(출하·폐사 전) 개체들의 누적 투자비용 합계입니다.
         </p>
 
         {monthlyInvestment.length === 0 ? (

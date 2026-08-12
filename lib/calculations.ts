@@ -213,7 +213,7 @@ export interface MonthlyInBarnInvestment {
 }
 
 /**
- * 매월 1일 시점 기준, 그때 사육장에 있던(입식했고 아직 출하/폐사 전인) 개체들의
+ * 매월 말일(가장 최근 달은 오늘) 시점 기준, 그때 사육장에 있던(입식했고 아직 출하/폐사 전인) 개체들의
  * 누적 투자비용(입식가격 + 그 시점까지의 사료비 + 그 시점까지의 기타비용) 합계를 계산한다.
  * 실시간 투자비 흐름(늘어나는 추세)을 보기 위한 스톡(잔액) 지표 — calcYearlyCashFlow(흐름 지표)와는 다른 개념.
  */
@@ -229,7 +229,9 @@ export function calcMonthlyInBarnInvestment(
   const last = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
 
   while (cursor <= last) {
-    const snapshotDate = cursor;
+    const isCurrentMonth =
+      cursor.getFullYear() === endDate.getFullYear() && cursor.getMonth() === endDate.getMonth();
+    const snapshotDate = isCurrentMonth ? endDate : new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
     let totalInvestment = 0;
     let headCount = 0;
 

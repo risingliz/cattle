@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/Card";
 import { InlineBar } from "@/components/ui/InlineBar";
+import { WeeklyPriceLineChart } from "@/components/charts/WeeklyPriceLineChart";
 import { fetchWeeklyGradePriceHistory } from "@/lib/eumseong-api";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,12 @@ export default async function MarketPricePage() {
             <span className={pctClass(latest.wow)}>{formatPct(latest.wow)}</span> · 전월대비{" "}
             <span className={pctClass(latest.mom)}>{formatPct(latest.mom)}</span>
           </p>
+        </Card>
+      )}
+
+      {known.length > 0 && (
+        <Card title={`최근 ${WEEKS_BACK}주 가격 추이`}>
+          <WeeklyPriceLineChart data={withDeltas} />
         </Card>
       )}
 
