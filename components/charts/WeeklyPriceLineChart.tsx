@@ -6,6 +6,14 @@ import type { WeeklyGradePrice } from "@/lib/eumseong-api";
 interface Props {
   /** 오래된 주부터 최신 주 순서. */
   data: WeeklyGradePrice[];
+  /** 모든 데이터 포인트에 점(circle)을 표시할지 여부. 포인트가 많은 장기 그래프에서는 false로 선을 깔끔하게 유지. */
+  showAllPoints?: boolean;
+  /** x축 라벨을 몇 번째 포인트마다 표시할지 (1이면 전부 표시). */
+  xLabelEvery?: number;
+  /** x축 라벨 형식: "day"는 M/D, "month"는 YY.MM. */
+  xLabelFormat?: "day" | "month";
+  /** 지정 시 툴팁에 도체중 환산 총액을 함께 표시. */
+  carcassWeightKg?: number;
 }
 
 const WIDTH = 640;
@@ -30,7 +38,18 @@ function formatMonthDay(iso: string): string {
   return `${Number(parts[1])}/${Number(parts[2])}`;
 }
 
-export function WeeklyPriceLineChart({ data }: Props) {
+function formatYearMonth(iso: string): string {
+  const parts = iso.split("-");
+  return `${parts[0].slice(2)}.${parts[1]}`;
+}
+
+export function WeeklyPriceLineChart({
+  data,
+  showAllPoints = true,
+  xLabelEvery = 1,
+  xLabelFormat = "day",
+  carcassWeightKg,
+}: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
@@ -156,18 +175,21 @@ export function WeeklyPriceLineChart({ data }: Props) {
           </g>
         ))}
 
-        {data.map((d, i) => (
-          <text
-            key={d.weekStart}
-            x={xForIndex(i)}
-            y={HEIGHT - 8}
-            textAnchor="middle"
-            fontSize={10}
-            fill="var(--muted)"
-          >
-            {formatMonthDay(d.weekStart)}
-          </text>
-        ))}
+        {data.map((d, i) => {
+          if (i % xLabelEvery !== 0 && i !== data.length - 1) return null;
+          return (
+            <text
+              key={d.weekStart}
+              x={xForIndex(i)}
+              y={HEIGHT - 8}
+              textAnchor="middle"
+              fontSize={10}
+              fill="var(--muted)"
+            >
+              {xLabelFormat === "month" ? formatYearMonth(d.weekStart) : formatMonthDay(d.weekStart)}
+            </text>
+          );
+        })}
 
         {segments.map((seg, i) => (
           <path
@@ -181,8 +203,11 @@ export function WeeklyPriceLineChart({ data }: Props) {
           />
         ))}
 
-        {data.map((d, i) =>
-          d.pricePerKg != null ? (
+        {data.map((d, i) => {
+          if (d.pricePerKg == null) return null;
+          const isEndpoint = lastKnown?.index === i;
+          if (!showAllPoints && hoverIdx !== i && !isEndpoint) return null;
+          return (
             <circle
               key={d.weekStart}
               cx={xForIndex(i)}
@@ -192,8 +217,8 @@ export function WeeklyPriceLineChart({ data }: Props) {
               stroke="var(--ring)"
               strokeWidth={2}
             />
-          ) : null
-        )}
+          );
+        })}
 
         {lastKnown && (
           <text
@@ -243,15 +268,24 @@ export function WeeklyPriceLineChart({ data }: Props) {
             {hovered.weekStart} ~ {hovered.weekEnd}
           </div>
           {hovered.pricePerKg != null ? (
-            <div className="mt-0.5 flex items-baseline gap-2">
-              <span className="font-semibold text-black dark:text-white">{formatWon(hovered.pricePerKg)}원/kg</span>
-              {hoveredWow != null && (
-                <span className={hoveredWow >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>
-                  {hoveredWow > 0 ? "+" : ""}
-                  {hoveredWow.toFixed(1)}%
-                </span>
+            <>
+              <div className="mt-0.5 flex items-baseline gap-2">
+                <span className="font-semibold text-black dark:text-white">{formatWon(hovered.pricePerKg)}원/kg</span>
+                {hoveredWow != null && (
+                  <span
+                    className={hoveredWow >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}
+                  >
+                    {hoveredWow > 0 ? "+" : ""}
+                    {hoveredWow.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {carcassWeightKg != null && (
+                <div className="mt-0.5 text-black/50 dark:text-white/50">
+                  도체중 {carcassWeightKg}kg 기준 약 {formatWon(hovered.pricePerKg * carcassWeightKg)}원
+                </div>
               )}
-            </div>
+            </>
           ) : (
             <div className="mt-0.5 text-black/40 dark:text-white/40">거래 없음</div>
           )}

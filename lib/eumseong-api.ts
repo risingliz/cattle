@@ -60,7 +60,7 @@ async function fetchXml(url: string): Promise<any> {
 
   let text: string;
   try {
-    const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
+    const res = await fetch(url, { signal: controller.signal, next: { revalidate: 3600 } });
     text = await res.text();
   } finally {
     clearTimeout(timeout);
@@ -173,6 +173,28 @@ export interface WeeklyGradePrice {
   pricePerKg: number | null;
 }
 
+const HISTORY_FETCH_CONCURRENCY = 10;
+
+/** items를 최대 limit개씩 동시에 처리한다 (원본 API에 한 번에 너무 많은 동시 요청을 보내지 않기 위함). */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 /** 최근 weeksBack주(가장 오래된 것부터)의 등급 평균 낙찰가(원/kg) 추이를 조회한다. */
 export async function fetchWeeklyGradePriceHistory(
   gradeNm: string,
@@ -181,22 +203,20 @@ export async function fetchWeeklyGradePriceHistory(
 ): Promise<WeeklyGradePrice[]> {
   const weekOffsets = Array.from({ length: weeksBack }, (_, i) => weeksBack - 1 - i);
 
-  const results = await Promise.all(
-    weekOffsets.map(async (weeksAgo) => {
-      const { start, end } = getTueFriForWeeksAgo(referenceDate, weeksAgo);
-      let pricePerKg: number | null = null;
-      try {
-        pricePerKg = await fetchGradeAveragePricePerKg(gradeNm, start, end);
-      } catch {
-        pricePerKg = null;
-      }
-      return {
-        weekStart: start.toISOString().slice(0, 10),
-        weekEnd: end.toISOString().slice(0, 10),
-        pricePerKg,
-      };
-    })
-  );
+  const results = await mapWithConcurrency(weekOffsets, HISTORY_FETCH_CONCURRENCY, async (weeksAgo) => {
+    const { start, end } = getTueFriForWeeksAgo(referenceDate, weeksAgo);
+    let pricePerKg: number | null = null;
+    try {
+      pricePerKg = await fetchGradeAveragePricePerKg(gradeNm, start, end);
+    } catch {
+      pricePerKg = null;
+    }
+    return {
+      weekStart: start.toISOString().slice(0, 10),
+      weekEnd: end.toISOString().slice(0, 10),
+      pricePerKg,
+    };
+  });
 
   return results;
 }

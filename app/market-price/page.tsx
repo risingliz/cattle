@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 
 const GRADE = "1++B";
 const WEEKS_BACK = 12;
+const LONG_TERM_WEEKS_BACK = 104; // 약 2년
+const CARCASS_WEIGHT_KG = 500;
 
 function formatPct(v: number | null): string {
   if (v == null) return "-";
@@ -19,6 +21,11 @@ function formatWon(v: number | null): string {
   return `${new Intl.NumberFormat("ko-KR").format(Math.round(v))}원`;
 }
 
+function formatCarcassTotal(pricePerKg: number | null): string {
+  if (pricePerKg == null) return "-";
+  return formatWon(pricePerKg * CARCASS_WEIGHT_KG);
+}
+
 function pctClass(v: number | null): string {
   if (v == null) return "";
   return v >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
@@ -26,11 +33,12 @@ function pctClass(v: number | null): string {
 
 export default async function MarketPricePage() {
   const today = new Date();
-  const weeklyAsc = await fetchWeeklyGradePriceHistory(GRADE, WEEKS_BACK, today);
+  // 2년치를 한 번에 받아 최근 N주 상세 표는 그 끝부분을 잘라 쓴다 (중복 조회 방지).
+  const fullAsc = await fetchWeeklyGradePriceHistory(GRADE, LONG_TERM_WEEKS_BACK, today);
 
-  const withDeltas = weeklyAsc.map((w, i) => {
-    const prevWeek = weeklyAsc[i - 1];
-    const prevMonth = weeklyAsc[i - 4];
+  const withDeltas = fullAsc.map((w, i) => {
+    const prevWeek = fullAsc[i - 1];
+    const prevMonth = fullAsc[i - 4];
     const wow =
       w.pricePerKg != null && prevWeek?.pricePerKg
         ? ((w.pricePerKg - prevWeek.pricePerKg) / prevWeek.pricePerKg) * 100
@@ -42,8 +50,10 @@ export default async function MarketPricePage() {
     return { ...w, wow, mom };
   });
 
-  const chronologicalDesc = [...withDeltas].reverse();
-  const known = withDeltas.filter((w) => w.pricePerKg != null);
+  const recentWithDeltas = withDeltas.slice(-WEEKS_BACK);
+  const chronologicalDesc = [...recentWithDeltas].reverse();
+  const known = recentWithDeltas.filter((w) => w.pricePerKg != null);
+  const knownLongTerm = withDeltas.filter((w) => w.pricePerKg != null);
   const maxPrice = Math.max(1, ...known.map((w) => w.pricePerKg ?? 0));
   const latest = chronologicalDesc[0];
 
@@ -62,12 +72,27 @@ export default async function MarketPricePage() {
             <span className={pctClass(latest.wow)}>{formatPct(latest.wow)}</span> · 전월대비{" "}
             <span className={pctClass(latest.mom)}>{formatPct(latest.mom)}</span>
           </p>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            도체중 {CARCASS_WEIGHT_KG}kg 기준 약 <span className="font-medium">{formatCarcassTotal(latest.pricePerKg)}</span>
+          </p>
         </Card>
       )}
 
       {known.length > 0 && (
         <Card title={`최근 ${WEEKS_BACK}주 가격 추이`}>
-          <WeeklyPriceLineChart data={withDeltas} />
+          <WeeklyPriceLineChart data={recentWithDeltas} carcassWeightKg={CARCASS_WEIGHT_KG} />
+        </Card>
+      )}
+
+      {knownLongTerm.length > 0 && (
+        <Card title={`최근 ${Math.round(LONG_TERM_WEEKS_BACK / 52)}년 가격 추이`}>
+          <WeeklyPriceLineChart
+            data={withDeltas}
+            showAllPoints={false}
+            xLabelEvery={8}
+            xLabelFormat="month"
+            carcassWeightKg={CARCASS_WEIGHT_KG}
+          />
         </Card>
       )}
 
@@ -82,6 +107,7 @@ export default async function MarketPricePage() {
                   <th className="pb-2 pr-4">주 (화~금)</th>
                   <th className="pb-2 pr-4">추이</th>
                   <th className="pb-2 pr-4">kg당 단가</th>
+                  <th className="pb-2 pr-4">{CARCASS_WEIGHT_KG}kg 환산</th>
                   <th className="pb-2 pr-4">전주대비</th>
                   <th className="pb-2">전월대비</th>
                 </tr>
@@ -100,6 +126,7 @@ export default async function MarketPricePage() {
                       )}
                     </td>
                     <td className="py-2 pr-4">{formatWon(w.pricePerKg)}</td>
+                    <td className="py-2 pr-4">{formatCarcassTotal(w.pricePerKg)}</td>
                     <td className={`py-2 pr-4 ${pctClass(w.wow)}`}>{formatPct(w.wow)}</td>
                     <td className={`py-2 ${pctClass(w.mom)}`}>{formatPct(w.mom)}</td>
                   </tr>
