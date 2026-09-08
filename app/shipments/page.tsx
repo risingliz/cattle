@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { Card, StatTile } from "@/components/ui/Card";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { SortableTh } from "@/components/ui/SortableTh";
+import { SortChips } from "@/components/ui/SortChips";
 import { YearFilterForm } from "@/components/shipments/YearFilterForm";
-import { formatDate, formatKRW, formatPercent } from "@/lib/format";
+import { formatDate, formatKRW, formatPercent, getManagementNumber } from "@/lib/format";
 import { getAllCattleWithProfitability, type CattleWithSummary } from "@/lib/queries";
 import { calcMonthsBetween, type ProfitabilitySummary } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
@@ -187,7 +189,90 @@ export default async function ShipmentsPage({
         {sorted.length === 0 ? (
           <p className="text-sm text-black/60 dark:text-white/60">해당 조건의 개체가 없습니다.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* 좁은 화면: 카드 목록 (표로는 순수익 칸이 6줄까지 쪼개진다) */}
+            <div className="sm:hidden">
+              <SortChips
+                options={[
+                  { label: "등급", column: "grade" },
+                  { label: "도체중", column: "weight" },
+                  { label: "출하일", column: "exitDate" },
+                  { label: "순수익", column: "profit" },
+                ]}
+                basePath="/shipments"
+                params={sortParams}
+                activeSort={params.sort}
+                activeDir={params.dir}
+              />
+              <ul className="flex flex-col gap-2">
+                {sorted.map(({ cattle, summary }) => {
+                  const ageMonths = exitAgeMonths(cattle);
+                  const netProfit = summary?.netProfit ?? null;
+                  const profitClass =
+                    netProfit == null
+                      ? ""
+                      : netProfit >= 0
+                        ? "text-green-600 dark:text-green-400"
+                        : "text-red-600 dark:text-red-400";
+                  return (
+                    <li key={cattle.id}>
+                      <Link
+                        href={`/cattle/${cattle.id}`}
+                        className="flex flex-col gap-1.5 rounded-lg border border-black/10 p-3 active:bg-black/[0.03] dark:border-white/10 dark:active:bg-white/5"
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="whitespace-nowrap font-mono text-xl font-semibold tabular-nums">
+                            {getManagementNumber(cattle.trace_no)}
+                          </span>
+                          <span
+                            className={`whitespace-nowrap font-mono text-base font-semibold tabular-nums ${profitClass}`}
+                          >
+                            {netProfit == null ? "-" : formatKRW(netProfit)}
+                            {summary?.annualizedReturnPct != null && (
+                              <span className="text-xs"> ({formatPercent(summary.annualizedReturnPct)})</span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 overflow-x-auto">
+                          <span className="flex gap-1">
+                            {cattle.status === "폐사" ? (
+                              <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                                폐사
+                              </span>
+                            ) : (
+                              <>
+                                <span className="rounded bg-black px-1.5 py-0.5 font-mono text-[11px] font-semibold whitespace-nowrap text-white dark:bg-white dark:text-black">
+                                  {cattle.grade_nm ?? "등급 미확인"}
+                                </span>
+                                {cattle.grade_nm?.startsWith("1++") && cattle.insfat != null && (
+                                  <span className="rounded bg-black/5 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-black/60 dark:bg-white/10 dark:text-white/60">
+                                    근내 {cattle.insfat}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                            {summary?.usedEstimatedPrice && (
+                              <span className="rounded border border-black/15 px-1.5 py-0.5 text-[11px] whitespace-nowrap text-black/40 dark:border-white/15 dark:text-white/40">
+                                추정
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+                            {cattle.carcass_weight != null ? `${cattle.carcass_weight}kg · ` : ""}
+                            {formatDate(exitDate(cattle))}
+                            {ageMonths != null && ` · ${ageMonths}개월`}
+                          </span>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {/* 넓은 화면: 기존 표 그대로 */}
+            <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
@@ -257,7 +342,8 @@ export default async function ShipmentsPage({
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
     </div>

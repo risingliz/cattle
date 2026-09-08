@@ -46,6 +46,16 @@ export function calcMonthsBetween(startDate: Date, endDate: Date): number {
   return Math.max(months + 1, 0);
 }
 
+export type FeedingStage = "육성비육" | "비육전기" | "비육후기" | "출하대기";
+
+/** 월령 기준 사육 단계 구분: ~13개월 육성비육, ~21개월 비육전기, ~28개월 비육후기, 그 이후 출하대기. */
+export function calcFeedingStage(ageMonths: number): FeedingStage {
+  if (ageMonths <= 13) return "육성비육";
+  if (ageMonths <= 21) return "비육전기";
+  if (ageMonths <= 28) return "비육후기";
+  return "출하대기";
+}
+
 export function addMonths(date: Date, months: number): Date {
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);

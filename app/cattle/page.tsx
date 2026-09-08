@@ -3,10 +3,11 @@ import { Card } from "@/components/ui/Card";
 import { TraceNoLink } from "@/components/cattle/TraceNoLink";
 import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { SortableTh } from "@/components/ui/SortableTh";
+import { SortChips } from "@/components/ui/SortChips";
 import { primaryButtonClass } from "@/components/ui/classes";
 import { formatKRW, getManagementNumber } from "@/lib/format";
 import { getAllCattleWithProfitability, type CattleWithSummary } from "@/lib/queries";
-import { addMonths, calcMonthsBetween } from "@/lib/calculations";
+import { addMonths, calcFeedingStage, calcMonthsBetween } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -158,7 +159,58 @@ export default async function CattleListPage({
         {active.length === 0 ? (
           <p className="text-sm text-black/60 dark:text-white/60">사육중인 개체가 없습니다.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            {/* 좁은 화면: 카드 목록 (표를 375px에 욱여넣으면 숫자가 중간에서 끊긴다) */}
+            <div className="sm:hidden">
+              <SortChips
+                options={[
+                  { label: "우방", column: "pen" },
+                  { label: "생년월일", column: "birth" },
+                  { label: "투자비용", column: "investment" },
+                ]}
+                basePath="/cattle"
+                params={sortParams}
+                activeSort={params.sort}
+                activeDir={params.dir}
+              />
+              <ul className="flex flex-col gap-2">
+                {active.map(({ cattle, summary, ageMonths }) => (
+                  <li key={cattle.id}>
+                    <Link
+                      href={`/cattle/${cattle.id}`}
+                      className="flex flex-col gap-1.5 rounded-lg border border-black/10 p-3 active:bg-black/[0.03] dark:border-white/10 dark:active:bg-white/5"
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="whitespace-nowrap font-mono text-xl font-semibold tabular-nums">
+                          {getManagementNumber(cattle.trace_no)}
+                        </span>
+                        <span className="whitespace-nowrap font-mono text-base font-semibold tabular-nums">
+                          {formatKRW(summary?.totalInvestment)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 overflow-x-auto">
+                        <span className="flex gap-1">
+                          {ageMonths != null && (
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                              {calcFeedingStage(ageMonths)}
+                            </span>
+                          )}
+                          <span className="rounded bg-black/5 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-black/60 dark:bg-white/10 dark:text-white/60">
+                            {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "우방 미배정") : "우방 미배정"}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+                          {cattle.birth_date ? `${cattle.birth_date} · ${ageMonths}개월` : "생년월일 미확인"}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 넓은 화면: 기존 표 그대로 */}
+            <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
@@ -212,7 +264,8 @@ export default async function CattleListPage({
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
     </div>
