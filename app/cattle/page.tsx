@@ -53,6 +53,20 @@ function buildShipmentFlow(cattleWithBirth: Cattle[], today: Date) {
 
 type ActiveRow = CattleWithSummary & { ageMonths: number | null };
 
+/** 근내지방도 유전등급 칩 색상. A가 가장 우수. */
+function marblingChipClass(grade: string): string {
+  switch (grade) {
+    case "A":
+      return "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300";
+    case "B":
+      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300";
+    case "D":
+      return "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300";
+    default:
+      return "border-black/10 bg-black/5 text-black/60 dark:border-white/15 dark:bg-white/10 dark:text-white/60";
+  }
+}
+
 function sortActive(
   rows: ActiveRow[],
   sort: string | undefined,
@@ -78,6 +92,14 @@ function sortActive(
     case "investment":
       sorted.sort(
         (a, b) => factor * ((a.summary?.totalInvestment ?? -1) - (b.summary?.totalInvestment ?? -1))
+      );
+      break;
+    case "marbling":
+      // 유전등급은 A가 가장 우수하므로 오름차순이 곧 우수순. 미등록 개체는 항상 뒤로.
+      sorted.sort(
+        (a, b) =>
+          factor *
+          (a.cattle.ebv_marbling_grade ?? "Z").localeCompare(b.cattle.ebv_marbling_grade ?? "Z")
       );
       break;
     default:
@@ -166,6 +188,7 @@ export default async function CattleListPage({
                 options={[
                   { label: "우방", column: "pen" },
                   { label: "생년월일", column: "birth" },
+                  { label: "유전(근내)", column: "marbling" },
                   { label: "투자비용", column: "investment" },
                 ]}
                 basePath="/cattle"
@@ -198,6 +221,13 @@ export default async function CattleListPage({
                           <span className="rounded bg-black/5 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-black/60 dark:bg-white/10 dark:text-white/60">
                             {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "우방 미배정") : "우방 미배정"}
                           </span>
+                          {cattle.ebv_marbling_grade && (
+                            <span
+                              className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${marblingChipClass(cattle.ebv_marbling_grade)}`}
+                            >
+                              근내 {cattle.ebv_marbling_grade}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
                           {cattle.birth_date ? `${cattle.birth_date} · ${ageMonths}개월` : "생년월일 미확인"}
@@ -234,6 +264,15 @@ export default async function CattleListPage({
                     className="pb-2 pr-4"
                   />
                   <SortableTh
+                    label="유전 (근내)"
+                    column="marbling"
+                    basePath="/cattle"
+                    params={sortParams}
+                    activeSort={params.sort}
+                    activeDir={params.dir}
+                    className="pb-2 pr-4"
+                  />
+                  <SortableTh
                     label="누적 투자비용"
                     column="investment"
                     basePath="/cattle"
@@ -258,6 +297,21 @@ export default async function CattleListPage({
                     </td>
                     <td className="py-2 pr-4">
                       {cattle.birth_date ? `${cattle.birth_date} (${ageMonths}개월)` : "-"}
+                    </td>
+                    <td className="py-2 pr-4">
+                      {cattle.ebv_marbling_grade ? (
+                        <span className="font-medium">
+                          {cattle.ebv_marbling_grade}
+                          {cattle.ebv_marbling != null && (
+                            <span className="ml-1 text-xs text-black/40 dark:text-white/40">
+                              ({cattle.ebv_marbling > 0 ? "+" : ""}
+                              {cattle.ebv_marbling.toFixed(2)})
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
                     </td>
                     <td className="py-2">{formatKRW(summary?.totalInvestment)}</td>
                   </tr>

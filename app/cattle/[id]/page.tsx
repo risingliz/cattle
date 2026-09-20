@@ -157,6 +157,32 @@ export default async function CattleDetailPage({
         </Card>
       )}
 
+      {cattle.genetic_synced_at && (
+        <Card title="유전능력 (한국종축개량협회)">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <EbvField label="냉도체중" grade={cattle.ebv_carcass_weight_grade} value={cattle.ebv_carcass_weight} unit="kg" />
+            <EbvField label="등심단면적" grade={cattle.ebv_eye_muscle_area_grade} value={cattle.ebv_eye_muscle_area} unit="㎠" />
+            <EbvField label="등지방두께" grade={cattle.ebv_back_fat_grade} value={cattle.ebv_back_fat} unit="mm" />
+            <EbvField label="근내지방도" grade={cattle.ebv_marbling_grade} value={cattle.ebv_marbling} unit="" />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/5 pt-4 sm:grid-cols-4 dark:border-white/10">
+            <Field label="KPN (씨수소)" value={cattle.kpn ?? "-"} />
+            <Field label="계대" value={cattle.generation_no != null ? `${cattle.generation_no}대` : "-"} />
+            <Field
+              label="근친계수"
+              value={cattle.inbreeding_coef != null ? `${cattle.inbreeding_coef}%` : "-"}
+            />
+            <Field label="등록번호" value={cattle.aiak_reg_no ?? "-"} />
+          </div>
+
+          <p className="mt-3 text-xs text-black/50 dark:text-white/50">
+            괄호 안은 육종가(EBV)이며 등급 A가 가장 우수합니다. 등지방두께는 값이 작을수록(음수) 유리합니다.
+            {cattle.dam_trace_no && <> · 모: {cattle.dam_trace_no}</>}
+          </p>
+        </Card>
+      )}
+
       <Card title="기타 비용 (치료비 등)">
         <form
           action={addExtraCost.bind(null, cattle.id)}
@@ -240,4 +266,48 @@ function Field({ label, value }: { label: string; value: string }) {
       <div className="mt-0.5 text-sm font-medium">{value}</div>
     </div>
   );
+}
+
+/** 유전능력 한 형질: 등급(A~D)을 크게, 육종가를 괄호로. */
+function EbvField({
+  label,
+  grade,
+  value,
+  unit,
+}: {
+  label: string;
+  grade: string | null;
+  value: number | null;
+  unit: string;
+}) {
+  return (
+    <div className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+      <div className="text-xs text-black/50 dark:text-white/50">{label}</div>
+      <div className="mt-1 flex items-baseline gap-1.5">
+        <span className={`font-mono text-2xl font-semibold ${ebvGradeClass(grade)}`}>{grade ?? "-"}</span>
+        {value != null && (
+          <span className="font-mono text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+            {value > 0 ? "+" : ""}
+            {value.toFixed(2)}
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ebvGradeClass(grade: string | null): string {
+  switch (grade) {
+    case "A":
+      return "text-green-600 dark:text-green-400";
+    case "B":
+      return "text-blue-600 dark:text-blue-400";
+    case "C":
+      return "text-black/60 dark:text-white/60";
+    case "D":
+      return "text-red-600 dark:text-red-400";
+    default:
+      return "text-black/30 dark:text-white/30";
+  }
 }

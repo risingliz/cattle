@@ -46,6 +46,30 @@ export interface Cattle {
   wgrade: string | null;
   windex: number | null;
 
+  // 한국종축개량협회(AIAK) 등록·유전능력 정보. 농가별 등록현황 파일로 채워진다.
+  aiak_reg_no: string | null;
+  aiak_reg_type: string | null;
+  /** 계대 */
+  generation_no: number | null;
+  /** 씨수소 번호 (예: KPN1506) */
+  kpn: string | null;
+  /** 모(母) 개체식별번호 */
+  dam_trace_no: string | null;
+  /** 4대 형질 육종가(EBV)와 그 등급(A~D). 냉도체중 */
+  ebv_carcass_weight: number | null;
+  ebv_carcass_weight_grade: string | null;
+  /** 등심단면적 */
+  ebv_eye_muscle_area: number | null;
+  ebv_eye_muscle_area_grade: string | null;
+  /** 등지방두께 (음수가 유리) */
+  ebv_back_fat: number | null;
+  ebv_back_fat_grade: string | null;
+  /** 근내지방도 */
+  ebv_marbling: number | null;
+  ebv_marbling_grade: string | null;
+  inbreeding_coef: number | null;
+  genetic_synced_at: string | null;
+
   api_synced_at: string | null;
   memo: string | null;
 
