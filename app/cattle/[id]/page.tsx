@@ -305,7 +305,7 @@ function ebvGradeClass(grade: string | null): string {
     case "B":
       return "text-blue-600 dark:text-blue-400";
     case "C":
-      return "text-black/60 dark:text-white/60";
+      return "";
     case "D":
       return "text-red-600 dark:text-red-400";
     default:

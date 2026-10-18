@@ -1,16 +1,15 @@
 import { getEbvGradeCode, type EbvGrades } from "@/lib/format";
 
-/** 글자별 색: A는 눈에 띄게, D는 경고, B·C는 조용하게 둬서 A/D 개수가 바로 읽히도록. */
+/** 글자별 색: A는 초록, D는 빨강으로 강조하고 B·C는 기본 글자색으로 또렷하게. */
 function letterClass(letter: string): string {
   switch (letter) {
     case "A":
       return "font-bold text-green-600 dark:text-green-400";
     case "B":
+    case "C":
       return "font-semibold";
     case "D":
       return "font-semibold text-red-600 dark:text-red-400";
-    case "C":
-      return "text-black/50 dark:text-white/50";
     default:
       return "text-black/25 dark:text-white/25";
   }
