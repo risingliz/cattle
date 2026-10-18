@@ -8,6 +8,7 @@ import { ProfitSummaryCard } from "@/components/cattle/ProfitSummaryCard";
 import { CattleUpdateForm } from "@/components/cattle/CattleUpdateForm";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { FillInputButton } from "@/components/ui/FillInputButton";
+import { EbvGradeCode } from "@/components/cattle/EbvGradeCode";
 import { deleteCattle, addExtraCost, deleteExtraCost } from "@/app/cattle/actions";
 import { inputClass, labelClass, secondaryButtonClass, dangerButtonClass } from "@/components/ui/classes";
 import { formatDate, formatKRW, formatInt, getManagementNumber } from "@/lib/format";
@@ -158,7 +159,7 @@ export default async function CattleDetailPage({
       )}
 
       {cattle.genetic_synced_at && (
-        <Card title="유전능력 (한국종축개량협회)">
+        <Card title="유전능력 (한국종축개량협회)" action={<EbvGradeCode cattle={cattle} size="lg" />}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <EbvField label="냉도체중" grade={cattle.ebv_carcass_weight_grade} value={cattle.ebv_carcass_weight} unit="kg" />
             <EbvField label="등심단면적" grade={cattle.ebv_eye_muscle_area_grade} value={cattle.ebv_eye_muscle_area} unit="㎠" />

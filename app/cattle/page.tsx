@@ -5,7 +5,8 @@ import { HorizontalBarList } from "@/components/ui/HorizontalBarList";
 import { SortableTh } from "@/components/ui/SortableTh";
 import { SortChips } from "@/components/ui/SortChips";
 import { primaryButtonClass } from "@/components/ui/classes";
-import { formatKRW, getManagementNumber } from "@/lib/format";
+import { EbvGradeCode } from "@/components/cattle/EbvGradeCode";
+import { EBV_TRAIT_ORDER, formatKRW, getEbvGradeCode, getManagementNumber } from "@/lib/format";
 import { getAllCattleWithProfitability, type CattleWithSummary } from "@/lib/queries";
 import { addMonths, calcFeedingStage, calcMonthsBetween } from "@/lib/calculations";
 import type { Cattle } from "@/lib/types";
@@ -53,20 +54,6 @@ function buildShipmentFlow(cattleWithBirth: Cattle[], today: Date) {
 
 type ActiveRow = CattleWithSummary & { ageMonths: number | null };
 
-/** 근내지방도 유전등급 칩 색상. A가 가장 우수. */
-function marblingChipClass(grade: string): string {
-  switch (grade) {
-    case "A":
-      return "border-green-200 bg-green-50 text-green-700 dark:border-green-500/30 dark:bg-green-500/15 dark:text-green-300";
-    case "B":
-      return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/15 dark:text-blue-300";
-    case "D":
-      return "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/15 dark:text-red-300";
-    default:
-      return "border-black/10 bg-black/5 text-black/60 dark:border-white/15 dark:bg-white/10 dark:text-white/60";
-  }
-}
-
 function sortActive(
   rows: ActiveRow[],
   sort: string | undefined,
@@ -94,13 +81,17 @@ function sortActive(
         (a, b) => factor * ((a.summary?.totalInvestment ?? -1) - (b.summary?.totalInvestment ?? -1))
       );
       break;
-    case "marbling":
-      // 유전등급은 A가 가장 우수하므로 오름차순이 곧 우수순. 미등록 개체는 항상 뒤로.
-      sorted.sort(
-        (a, b) =>
-          factor *
-          (a.cattle.ebv_marbling_grade ?? "Z").localeCompare(b.cattle.ebv_marbling_grade ?? "Z")
-      );
+    case "ebv":
+      // "AABC" 문자열 비교. A가 가장 우수하므로 오름차순이 곧 우수순이고,
+      // 앞자리(냉도체중)부터 비교된다. 유전자료 없는 개체는 정렬 방향과 무관하게 뒤로.
+      sorted.sort((a, b) => {
+        const ac = getEbvGradeCode(a.cattle);
+        const bc = getEbvGradeCode(b.cattle);
+        if (!ac && !bc) return 0;
+        if (!ac) return 1;
+        if (!bc) return -1;
+        return factor * ac.localeCompare(bc);
+      });
       break;
     default:
       sorted.sort((a, b) => (b.ageMonths ?? -1) - (a.ageMonths ?? -1));
@@ -182,13 +173,21 @@ export default async function CattleListPage({
           <p className="text-sm text-black/60 dark:text-white/60">사육중인 개체가 없습니다.</p>
         ) : (
           <>
+            {active.some(({ cattle }) => getEbvGradeCode(cattle)) && (
+              <p className="mb-3 text-xs text-black/50 dark:text-white/50">
+                유전등급은{" "}
+                <span className="font-mono tracking-[0.1em] text-black/70 dark:text-white/70">AABC</span> 순서로{" "}
+                {EBV_TRAIT_ORDER.join(" · ")} 입니다.
+              </p>
+            )}
+
             {/* 좁은 화면: 카드 목록 (표를 375px에 욱여넣으면 숫자가 중간에서 끊긴다) */}
             <div className="sm:hidden">
               <SortChips
                 options={[
                   { label: "우방", column: "pen" },
                   { label: "생년월일", column: "birth" },
-                  { label: "유전(근내)", column: "marbling" },
+                  { label: "유전등급", column: "ebv" },
                   { label: "투자비용", column: "investment" },
                 ]}
                 basePath="/cattle"
@@ -212,20 +211,18 @@ export default async function CattleListPage({
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 overflow-x-auto">
-                        <span className="flex gap-1">
+                        <span className="flex items-center gap-1">
                           {ageMonths != null && (
-                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                            <span className="rounded bg-blue-50 px-1.5 py-1 text-[11px] leading-none font-semibold whitespace-nowrap text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
                               {calcFeedingStage(ageMonths)}
                             </span>
                           )}
-                          <span className="rounded bg-black/5 px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap text-black/60 dark:bg-white/10 dark:text-white/60">
-                            {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "우방 미배정") : "우방 미배정"}
+                          <span className="rounded bg-black/5 px-1.5 py-1 text-[11px] leading-none font-semibold whitespace-nowrap text-black/60 dark:bg-white/10 dark:text-white/60">
+                            {cattle.pen_id ? (penNameById.get(cattle.pen_id) ?? "미배정") : "미배정"}
                           </span>
-                          {cattle.ebv_marbling_grade && (
-                            <span
-                              className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${marblingChipClass(cattle.ebv_marbling_grade)}`}
-                            >
-                              근내 {cattle.ebv_marbling_grade}
+                          {getEbvGradeCode(cattle) && (
+                            <span className="inline-flex items-center rounded border border-black/10 bg-black/[0.03] px-1.5 py-1 leading-none dark:border-white/15 dark:bg-white/5">
+                              <EbvGradeCode cattle={cattle} />
                             </span>
                           )}
                         </span>
@@ -264,8 +261,8 @@ export default async function CattleListPage({
                     className="pb-2 pr-4"
                   />
                   <SortableTh
-                    label="유전 (근내)"
-                    column="marbling"
+                    label="유전등급"
+                    column="ebv"
                     basePath="/cattle"
                     params={sortParams}
                     activeSort={params.sort}
@@ -299,19 +296,7 @@ export default async function CattleListPage({
                       {cattle.birth_date ? `${cattle.birth_date} (${ageMonths}개월)` : "-"}
                     </td>
                     <td className="py-2 pr-4">
-                      {cattle.ebv_marbling_grade ? (
-                        <span className="font-medium">
-                          {cattle.ebv_marbling_grade}
-                          {cattle.ebv_marbling != null && (
-                            <span className="ml-1 text-xs text-black/40 dark:text-white/40">
-                              ({cattle.ebv_marbling > 0 ? "+" : ""}
-                              {cattle.ebv_marbling.toFixed(2)})
-                            </span>
-                          )}
-                        </span>
-                      ) : (
-                        "-"
-                      )}
+                      <EbvGradeCode cattle={cattle} />
                     </td>
                     <td className="py-2">{formatKRW(summary?.totalInvestment)}</td>
                   </tr>
