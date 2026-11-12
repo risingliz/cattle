@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/Card";
-import { InlineBar } from "@/components/ui/InlineBar";
 import { WeeklyPriceLineChart } from "@/components/charts/WeeklyPriceLineChart";
 import {
   fetchAllGradePricesPerKg,
@@ -82,7 +81,6 @@ export default async function MarketPricePage() {
   const chronologicalDesc = [...recentWithDeltas].reverse();
   const known = recentWithDeltas.filter((w) => w.pricePerKg != null);
   const knownLongTerm = withDeltas.filter((w) => w.pricePerKg != null);
-  const maxPrice = Math.max(1, ...known.map((w) => w.pricePerKg ?? 0));
 
   const currentWeek = withDeltas.at(-1)?.isPartial ? withDeltas.at(-1)! : null;
   const lastCompleted = [...withDeltas].reverse().find((w) => !w.isPartial && w.pricePerKg != null);
@@ -206,7 +204,6 @@ export default async function MarketPricePage() {
               <thead>
                 <tr className="text-left text-black/60 dark:text-white/60">
                   <th className="pb-2 pr-4">주 (화~금)</th>
-                  <th className="pb-2 pr-4">추이</th>
                   <th className="pb-2 pr-4">kg당 단가</th>
                   <th className="pb-2 pr-4">{CARCASS_WEIGHT_KG}kg 환산</th>
                   <th className="pb-2 pr-4">전주대비</th>
@@ -222,13 +219,6 @@ export default async function MarketPricePage() {
                         <span className="ml-1 rounded bg-black/5 px-1.5 py-0.5 text-[11px] leading-none font-semibold text-black/60 dark:bg-white/10 dark:text-white/60">
                           진행중
                         </span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-4">
-                      {w.pricePerKg != null ? (
-                        <InlineBar value={w.pricePerKg} max={maxPrice} />
-                      ) : (
-                        <span className="text-black/30 dark:text-white/30">-</span>
                       )}
                     </td>
                     <td className="py-2 pr-4 whitespace-nowrap tabular-nums">{formatWon(w.pricePerKg)}</td>
