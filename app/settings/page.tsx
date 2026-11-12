@@ -8,6 +8,11 @@ const SETTINGS_LINKS = [
     description: "새로 입식한 개체를 이력번호로 등록합니다.",
   },
   {
+    href: "/settings/resync",
+    title: "전체 상태 재조회",
+    description: "사육중 개체를 한 번에 재조회해 출하·폐사 여부를 반영합니다.",
+  },
+  {
     href: "/settings/pens",
     title: "우방 관리",
     description: "우방 이름을 수정하고 우방별 사육 현황을 확인합니다.",

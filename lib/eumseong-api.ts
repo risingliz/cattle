@@ -147,6 +147,34 @@ export async function fetchEumseongGradePricePerKgWithFallback(
 }
 
 /**
+ * 해당 구간의 음성공판장 등급별 평균 낙찰가(원/kg)를 한 번의 요청으로 모두 조회한다.
+ * API 응답 한 건에 모든 등급이 들어있으므로 등급마다 따로 요청할 필요가 없다.
+ * 거래가 없는 등급은 null로 담긴다.
+ */
+export async function fetchAllGradePricesPerKg(
+  start: Date,
+  end: Date
+): Promise<Map<string, number | null>> {
+  const serviceKey = requireServiceKey();
+  const url = `${BASE_URL}/cattle?serviceKey=${serviceKey}&startYmd=${ymd(start)}&endYmd=${ymd(end)}&breedCd=${BREED_CD}&sexCd=${SEX_CD}&qgradeYn=N&defectIncludeYn=N`;
+
+  const parsed = await fetchXml(url);
+  assertSuccess(parsed, "음성공판장 등급 평균가 조회 실패");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = parsed?.response?.body?.items?.item ?? [];
+
+  const result = new Map<string, number | null>();
+  for (const it of items) {
+    const grade = typeof it.gradeNm === "string" ? it.gradeNm.trim() : null;
+    if (!grade) continue;
+    const price = it.c_0513Amt != null ? Number(it.c_0513Amt) : NaN;
+    result.set(grade, Number.isFinite(price) ? price : null);
+  }
+  return result;
+}
+
+/**
  * 음성공판장 등급 단일 평균 낙찰가(원/kg)를 조회한다 (근내지방도 세분화 없이, cattle 엔드포인트만 사용).
  * 시세 추이처럼 특정 개체가 아니라 등급 자체의 시장 참고가를 볼 때 사용한다.
  */
@@ -155,22 +183,8 @@ export async function fetchGradeAveragePricePerKg(
   start: Date,
   end: Date
 ): Promise<number | null> {
-  const serviceKey = requireServiceKey();
-  const startYmd = ymd(start);
-  const endYmd = ymd(end);
-  const url = `${BASE_URL}/cattle?serviceKey=${serviceKey}&startYmd=${startYmd}&endYmd=${endYmd}&breedCd=${BREED_CD}&sexCd=${SEX_CD}&qgradeYn=N&defectIncludeYn=N`;
-
-  const parsed = await fetchXml(url);
-  assertSuccess(parsed, "음성공판장 등급 평균가 조회 실패");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const items: any[] = parsed?.response?.body?.items?.item ?? [];
-  const match = items.find((it) => it.gradeNm === gradeNm);
-
-  const raw = match?.c_0513Amt;
-  if (raw == null) return null;
-  const price = Number(raw);
-  return Number.isFinite(price) ? price : null;
+  const prices = await fetchAllGradePricesPerKg(start, end);
+  return prices.get(gradeNm) ?? null;
 }
 
 /** 기준일 기준 몇 주 전(weeksAgo)의 화~금 구간을 계산한다. 0주 전은 "가장 최근에 끝난" 화~금 주. */
@@ -198,10 +212,34 @@ export function getTueFriForWeeksAgo(referenceDate: Date, weeksAgo: number): { s
   return { start, end };
 }
 
+/**
+ * 아직 끝나지 않은 "금주"의 거래 구간(화요일 ~ 기준일)을 계산한다.
+ * 이번 주가 이미 금요일까지 끝났으면(= getTueFriForWeeksAgo의 0주차가 곧 이번 주) null,
+ * 아직 화요일 전이어서 경매일이 하루도 없으면 null을 반환한다.
+ */
+export function getCurrentPartialWeek(referenceDate: Date): { start: Date; end: Date } | null {
+  const day = referenceDate.getDay();
+  const isoDay = day === 0 ? 7 : day;
+  const thisMonday = new Date(referenceDate);
+  thisMonday.setDate(referenceDate.getDate() - (isoDay - 1));
+
+  const thisTuesday = new Date(thisMonday);
+  thisTuesday.setDate(thisMonday.getDate() + 1);
+  const thisFriday = new Date(thisMonday);
+  thisFriday.setDate(thisMonday.getDate() + 4);
+
+  if (referenceDate >= thisFriday) return null; // 이미 완료된 주 — 0주차가 그대로 커버한다
+  if (referenceDate < thisTuesday) return null; // 월요일: 아직 경매일 없음
+
+  return { start: thisTuesday, end: referenceDate };
+}
+
 export interface WeeklyGradePrice {
   weekStart: string;
   weekEnd: string;
   pricePerKg: number | null;
+  /** 아직 주가 끝나지 않아 일부 거래일만 반영된 값인지. */
+  isPartial: boolean;
 }
 
 const HISTORY_FETCH_CONCURRENCY = 10;
@@ -226,11 +264,16 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-/** 최근 weeksBack주(가장 오래된 것부터)의 등급 평균 낙찰가(원/kg) 추이를 조회한다. */
+/**
+ * 최근 weeksBack주(가장 오래된 것부터)의 등급 평균 낙찰가(원/kg) 추이를 조회한다.
+ * includeCurrentWeek가 true면 아직 진행 중인 금주의 부분 평균을 맨 뒤에 덧붙인다
+ * (isPartial=true). 금주에 거래가 아직 없으면 붙이지 않는다.
+ */
 export async function fetchWeeklyGradePriceHistory(
   gradeNm: string,
   weeksBack: number,
-  referenceDate: Date
+  referenceDate: Date,
+  includeCurrentWeek = false
 ): Promise<WeeklyGradePrice[]> {
   const weekOffsets = Array.from({ length: weeksBack }, (_, i) => weeksBack - 1 - i);
 
@@ -246,7 +289,28 @@ export async function fetchWeeklyGradePriceHistory(
       weekStart: start.toISOString().slice(0, 10),
       weekEnd: end.toISOString().slice(0, 10),
       pricePerKg,
+      isPartial: false,
     };
+  });
+
+  if (!includeCurrentWeek) return results;
+
+  const partial = getCurrentPartialWeek(referenceDate);
+  if (!partial) return results;
+
+  let partialPrice: number | null = null;
+  try {
+    partialPrice = await fetchGradeAveragePricePerKg(gradeNm, partial.start, partial.end);
+  } catch {
+    partialPrice = null;
+  }
+  if (partialPrice == null) return results;
+
+  results.push({
+    weekStart: partial.start.toISOString().slice(0, 10),
+    weekEnd: partial.end.toISOString().slice(0, 10),
+    pricePerKg: partialPrice,
+    isPartial: true,
   });
 
   return results;

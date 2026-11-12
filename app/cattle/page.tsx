@@ -94,7 +94,11 @@ function sortActive(
       });
       break;
     default:
-      sorted.sort((a, b) => (b.ageMonths ?? -1) - (a.ageMonths ?? -1));
+      // 기본 정렬: 생년월일 오름차순 = 월령 높은(출하가 가까운) 개체가 앞으로.
+      // 월령(개월)으로 정렬하면 같은 개월끼리 순서가 들쭉날쭉하므로 생년월일을 직접 쓴다.
+      sorted.sort((a, b) =>
+        (a.cattle.birth_date ?? "9999-12-31").localeCompare(b.cattle.birth_date ?? "9999-12-31")
+      );
   }
 
   return sorted;

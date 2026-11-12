@@ -56,7 +56,7 @@ export function WeeklyPriceLineChart({
   const innerW = WIDTH - MARGIN.left - MARGIN.right;
   const innerH = HEIGHT - MARGIN.top - MARGIN.bottom;
 
-  const { xForIndex, yForPrice, yTicks, segments, lastKnown } = useMemo(() => {
+  const { xForIndex, yForPrice, yTicks, segments, partialLeg, lastKnown } = useMemo(() => {
     const known = data.filter((d): d is WeeklyGradePrice & { pricePerKg: number } => d.pricePerKg != null);
     const minPrice = known.length ? Math.min(...known.map((d) => d.pricePerKg)) : 0;
     const maxPrice = known.length ? Math.max(...known.map((d) => d.pricePerKg)) : 1;
@@ -71,9 +71,12 @@ export function WeeklyPriceLineChart({
     const xForIndex = (i: number) => (data.length > 1 ? MARGIN.left + (innerW * i) / (data.length - 1) : MARGIN.left + innerW / 2);
     const yForPrice = (p: number) => MARGIN.top + innerH - ((p - yMin) / (yMax - yMin)) * innerH;
 
+    // 진행 중인 주(isPartial)는 실선에서 떼어내고, 직전 주에서 이어지는 점선 구간으로 따로 그린다.
+    const solidData = data.map((d, i) => ({ d, i })).filter(({ d }) => !d.isPartial);
+
     const segs: { x: number; y: number }[][] = [];
     let current: { x: number; y: number }[] = [];
-    data.forEach((d, i) => {
+    solidData.forEach(({ d, i }) => {
       if (d.pricePerKg != null) {
         current.push({ x: xForIndex(i), y: yForPrice(d.pricePerKg) });
       } else if (current.length) {
@@ -82,6 +85,22 @@ export function WeeklyPriceLineChart({
       }
     });
     if (current.length) segs.push(current);
+
+    let leg: { x1: number; y1: number; x2: number; y2: number } | null = null;
+    const partialIdx = data.findIndex((d) => d.isPartial && d.pricePerKg != null);
+    if (partialIdx >= 0) {
+      const prev = solidData
+        .filter(({ i, d }) => i < partialIdx && d.pricePerKg != null)
+        .at(-1);
+      if (prev) {
+        leg = {
+          x1: xForIndex(prev.i),
+          y1: yForPrice(prev.d.pricePerKg!),
+          x2: xForIndex(partialIdx),
+          y2: yForPrice(data[partialIdx].pricePerKg!),
+        };
+      }
+    }
 
     let lastKnownIdx = -1;
     for (let i = data.length - 1; i >= 0; i--) {
@@ -96,6 +115,7 @@ export function WeeklyPriceLineChart({
       yForPrice,
       yTicks: ticks,
       segments: segs,
+      partialLeg: leg,
       lastKnown: lastKnownIdx >= 0 ? { index: lastKnownIdx, ...data[lastKnownIdx] } : null,
     };
   }, [data, innerW, innerH]);
@@ -203,6 +223,19 @@ export function WeeklyPriceLineChart({
           />
         ))}
 
+        {partialLeg && (
+          <line
+            x1={partialLeg.x1}
+            y1={partialLeg.y1}
+            x2={partialLeg.x2}
+            y2={partialLeg.y2}
+            stroke="var(--series)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray="4 4"
+          />
+        )}
+
         {data.map((d, i) => {
           if (d.pricePerKg == null) return null;
           const isEndpoint = lastKnown?.index === i;
@@ -266,6 +299,7 @@ export function WeeklyPriceLineChart({
         >
           <div className="text-black/60 dark:text-white/60">
             {hovered.weekStart} ~ {hovered.weekEnd}
+            {hovered.isPartial && <span className="ml-1 text-black/40 dark:text-white/40">(진행중)</span>}
           </div>
           {hovered.pricePerKg != null ? (
             <>
