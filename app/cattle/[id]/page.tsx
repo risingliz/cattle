@@ -1,17 +1,17 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { calcCattleProfitability } from "@/lib/calculations";
 import { Card } from "@/components/ui/Card";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SyncButton } from "@/components/cattle/SyncButton";
-import { ProfitSummaryCard } from "@/components/cattle/ProfitSummaryCard";
+import { CattleOverviewCard } from "@/components/cattle/CattleOverviewCard";
 import { CattleUpdateForm } from "@/components/cattle/CattleUpdateForm";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { FillInputButton } from "@/components/ui/FillInputButton";
 import { EbvGradeCode } from "@/components/cattle/EbvGradeCode";
 import { deleteCattle, addExtraCost, deleteExtraCost } from "@/app/cattle/actions";
 import { inputClass, labelClass, secondaryButtonClass, dangerButtonClass } from "@/components/ui/classes";
-import { formatDate, formatKRW, formatInt, getManagementNumber } from "@/lib/format";
+import { formatDate, formatKRW } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +38,12 @@ export default async function CattleDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold">{getManagementNumber(cattle.trace_no)}</h1>
-          <span className="text-sm text-black/40 dark:text-white/40">{cattle.trace_no}</span>
-          <StatusBadge status={cattle.status} />
-        </div>
+        <Link
+          href={cattle.status === "사육중" ? "/cattle" : "/shipments"}
+          className="text-sm text-black/50 hover:underline dark:text-white/50"
+        >
+          ← {cattle.status === "사육중" ? "사육 목록" : "출하 목록"}
+        </Link>
         <div className="flex items-center gap-2">
           <SyncButton cattleId={cattle.id} label="API 동기화" />
           <SyncButton cattleId={cattle.id} force label="강제 재조회" />
@@ -57,18 +58,34 @@ export default async function CattleDetailPage({
         </div>
       </div>
 
-      <Card title="이력 정보 (API 연동)">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Field label="출생일" value={formatDate(cattle.birth_date)} />
-          <Field label="입식일" value={formatDate(cattle.intake_date)} />
-          <Field label="출하일" value={formatDate(cattle.shipment_date)} />
-          <Field label="폐사일" value={formatDate(cattle.death_date)} />
-        </div>
-        <p className="mt-3 text-xs text-black/50 dark:text-white/50">
-          마지막 동기화:{" "}
-          {cattle.api_synced_at ? new Date(cattle.api_synced_at).toLocaleString("ko-KR") : "동기화 안 됨"}
-        </p>
-      </Card>
+      {/* 캡처해서 공유하는 용도의 요약 카드 — 가장 먼저 둔다 */}
+      <CattleOverviewCard cattle={cattle} summary={summary} />
+
+      {cattle.genetic_synced_at && (
+        <Card title="유전능력 (한국종축개량협회)" action={<EbvGradeCode cattle={cattle} size="lg" />}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <EbvField label="냉도체중" grade={cattle.ebv_carcass_weight_grade} value={cattle.ebv_carcass_weight} unit="kg" />
+            <EbvField label="등심단면적" grade={cattle.ebv_eye_muscle_area_grade} value={cattle.ebv_eye_muscle_area} unit="㎠" />
+            <EbvField label="등지방두께" grade={cattle.ebv_back_fat_grade} value={cattle.ebv_back_fat} unit="mm" />
+            <EbvField label="근내지방도" grade={cattle.ebv_marbling_grade} value={cattle.ebv_marbling} unit="" />
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/5 pt-4 sm:grid-cols-4 dark:border-white/10">
+            <Field label="KPN (씨수소)" value={cattle.kpn ?? "-"} />
+            <Field label="계대" value={cattle.generation_no != null ? `${cattle.generation_no}대` : "-"} />
+            <Field
+              label="근친계수"
+              value={cattle.inbreeding_coef != null ? `${cattle.inbreeding_coef}%` : "-"}
+            />
+            <Field label="등록번호" value={cattle.aiak_reg_no ?? "-"} />
+          </div>
+
+          <p className="mt-3 text-xs text-black/50 dark:text-white/50">
+            괄호 안은 육종가(EBV)이며 등급 A가 가장 우수합니다. 등지방두께는 값이 작을수록(음수) 유리합니다.
+            {cattle.dam_trace_no && <> · 모: {cattle.dam_trace_no}</>}
+          </p>
+        </Card>
+      )}
 
       <Card title="가격 / 우방 정보">
         <CattleUpdateForm cattleId={cattle.id}>
@@ -145,45 +162,6 @@ export default async function CattleDetailPage({
         </CattleUpdateForm>
       </Card>
 
-      {cattle.status === "출하완료" && (
-        <Card title="도축 결과 (API 연동)">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Field label="육질등급" value={cattle.grade_nm ?? "-"} />
-            <Field label="도체중" value={cattle.carcass_weight != null ? `${cattle.carcass_weight}kg` : "-"} />
-            <Field label="근내지방도" value={cattle.insfat != null ? formatInt(cattle.insfat) : "-"} />
-            <Field label="육량등급" value={cattle.wgrade ?? "-"} />
-            <Field label="육량지수" value={cattle.windex != null ? String(cattle.windex) : "-"} />
-            <Field label="발급번호" value={cattle.slaughter_issue_no ?? "-"} />
-          </div>
-        </Card>
-      )}
-
-      {cattle.genetic_synced_at && (
-        <Card title="유전능력 (한국종축개량협회)" action={<EbvGradeCode cattle={cattle} size="lg" />}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <EbvField label="냉도체중" grade={cattle.ebv_carcass_weight_grade} value={cattle.ebv_carcass_weight} unit="kg" />
-            <EbvField label="등심단면적" grade={cattle.ebv_eye_muscle_area_grade} value={cattle.ebv_eye_muscle_area} unit="㎠" />
-            <EbvField label="등지방두께" grade={cattle.ebv_back_fat_grade} value={cattle.ebv_back_fat} unit="mm" />
-            <EbvField label="근내지방도" grade={cattle.ebv_marbling_grade} value={cattle.ebv_marbling} unit="" />
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-black/5 pt-4 sm:grid-cols-4 dark:border-white/10">
-            <Field label="KPN (씨수소)" value={cattle.kpn ?? "-"} />
-            <Field label="계대" value={cattle.generation_no != null ? `${cattle.generation_no}대` : "-"} />
-            <Field
-              label="근친계수"
-              value={cattle.inbreeding_coef != null ? `${cattle.inbreeding_coef}%` : "-"}
-            />
-            <Field label="등록번호" value={cattle.aiak_reg_no ?? "-"} />
-          </div>
-
-          <p className="mt-3 text-xs text-black/50 dark:text-white/50">
-            괄호 안은 육종가(EBV)이며 등급 A가 가장 우수합니다. 등지방두께는 값이 작을수록(음수) 유리합니다.
-            {cattle.dam_trace_no && <> · 모: {cattle.dam_trace_no}</>}
-          </p>
-        </Card>
-      )}
-
       <Card title="기타 비용 (치료비 등)">
         <form
           action={addExtraCost.bind(null, cattle.id)}
@@ -255,7 +233,24 @@ export default async function CattleDetailPage({
         )}
       </Card>
 
-      <ProfitSummaryCard cattle={cattle} summary={summary} />
+      <Card title="이력 정보 (API 연동)">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Field label="출생일" value={formatDate(cattle.birth_date)} />
+          <Field label="입식일" value={formatDate(cattle.intake_date)} />
+          <Field label="출하일" value={formatDate(cattle.shipment_date)} />
+          <Field label="폐사일" value={formatDate(cattle.death_date)} />
+          {cattle.status === "출하완료" && (
+            <>
+              <Field label="육량지수" value={cattle.windex != null ? String(cattle.windex) : "-"} />
+              <Field label="도축 확인서 발급번호" value={cattle.slaughter_issue_no ?? "-"} />
+            </>
+          )}
+        </div>
+        <p className="mt-3 text-xs text-black/50 dark:text-white/50">
+          마지막 동기화:{" "}
+          {cattle.api_synced_at ? new Date(cattle.api_synced_at).toLocaleString("ko-KR") : "동기화 안 됨"}
+        </p>
+      </Card>
     </div>
   );
 }
