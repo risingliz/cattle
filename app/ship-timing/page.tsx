@@ -6,6 +6,7 @@ import {
   buildAgePerformance,
   projectShipping,
   MIN_SAMPLE,
+  TARGET_RETURN_RATE,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
 import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
@@ -51,7 +52,9 @@ export default async function ShipTimingPage() {
     .filter((r) => r.rec != null)
     .sort((a, b) => calcMonthsBetween(new Date(b.cattle.birth_date!), today) - calcMonthsBetween(new Date(a.cattle.birth_date!), today));
 
-  const scannedCount = active.filter((a) => a.latestScan).length;
+  // 초음파 예상등급이 있어야 개체별 단가를 쓸 수 있다. 없는 개체는 농장 평균밖에 못 써서 줄마다
+  // 같은 값이 반복되므로 표에서 제외한다.
+  const scanned = active.filter((a) => a.latestScan?.predicted_grade);
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -159,13 +162,21 @@ export default async function ShipTimingPage() {
         </p>
       </Card>
 
-      <Card title={`사육중 개체별 권장 시점 (${active.length}두)`}>
+      <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-3 text-xs text-black/50 dark:text-white/50">
-          <b>한 달 더 키울지</b>를 증분으로 비교합니다. <b>본전 증체</b> = 한 달 사료비 ÷ kg당 단가, 즉 사료비만
-          메우려면 그 달에 늘어야 하는 도체중입니다. 옆의 <b>농장 실적</b>은 출하 실적에서 실제로 그 구간에 늘어난
-          평균 도체중이라, 두 값을 견주면 더 키우는 게 남는지 바로 보입니다. kg당 단가는 초음파 예상등급이 있는
-          개체{scannedCount > 0 && ` (${scannedCount}두)`}는 그 등급의 지난주 시세를, 없으면 농장 월령별 평균
-          실현단가를 씁니다.
+          초음파 예상등급이 있는 개체만 표시합니다. 등급을 알아야 개체별 kg당 단가(그 등급의 지난주 시세)를
+          쓸 수 있고, 없으면 농장 평균이라 줄마다 같은 값이 반복됩니다.
+          <br />
+          <b>{Math.round(TARGET_RETURN_RATE * 100)}% 도체중</b> = 투자비 × {1 + TARGET_RETURN_RATE} ÷ kg당 단가.
+          이만큼 나오면 투자비 대비 {Math.round(TARGET_RETURN_RATE * 100)}%가 남습니다
+          {best && (
+            <>
+              {" "}
+              (농장 {best.ageMonths}개월 평균 도체중 <b>{Math.round(best.avgCarcassWeight)}kg</b>)
+            </>
+          )}
+          . <b>본전 증체</b> = 한 달 사료비 ÷ kg당 단가로, 옆의 <b>농장 실적 증체</b>보다 크면 더 키우는 게
+          손해입니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -174,15 +185,16 @@ export default async function ShipTimingPage() {
                 <th className="pb-2 pr-4">관리번호</th>
                 <th className="pb-2 pr-4">현재 월령</th>
                 <th className="pb-2 pr-4">초음파 예상등급</th>
+                <th className="pb-2 pr-4">투자비</th>
                 <th className="pb-2 pr-4">kg당 단가</th>
-                <th className="pb-2 pr-4">한 달 사료비</th>
+                <th className="pb-2 pr-4">{Math.round(TARGET_RETURN_RATE * 100)}% 도체중</th>
                 <th className="pb-2 pr-4">본전 증체</th>
                 <th className="pb-2 pr-4">농장 실적 증체</th>
                 <th className="pb-2">권장</th>
               </tr>
             </thead>
             <tbody>
-              {active.map(({ cattle, latestScan, scanPrice, rec }) => (
+              {scanned.map(({ cattle, latestScan, scanPrice, rec }) => (
                 <tr key={cattle.id} className="border-t border-black/5 dark:border-white/10">
                   <td className="py-2 pr-4">
                     <Link
@@ -218,10 +230,13 @@ export default async function ShipTimingPage() {
                     )}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {formatKRW(rec!.best!.expectedPricePerKg)}
+                    {formatKRW(rec!.best!.totalInvestmentAtShip)}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {rec!.marginal ? formatKRW(rec!.marginal.feedCost) : "-"}
+                    {formatKRW(rec!.best!.expectedPricePerKg)}
+                  </td>
+                  <td className="py-2 pr-4 font-semibold whitespace-nowrap tabular-nums">
+                    {Math.round(rec!.best!.targetWeightAtReturn)}kg
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {rec!.marginal ? `+${rec!.marginal.requiredGainKg.toFixed(1)}kg` : "-"}

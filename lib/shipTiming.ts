@@ -5,6 +5,9 @@ import type { Cattle, FeedCostPeriod } from "./types";
 /** 월령별 통계를 신뢰하고 쓰기 위한 최소 표본 두수. */
 export const MIN_SAMPLE = 3;
 
+/** 목표 수익률. 순수익 ÷ 투자비 기준. */
+export const TARGET_RETURN_RATE = 0.25;
+
 export interface AgeStat {
   ageMonths: number;
   count: number;
@@ -91,6 +94,12 @@ export interface ShipProjection {
    * 농장 평균 도체중과 비교해 바로 검증할 수 있다.
    */
   breakEvenWeight: number;
+  /**
+   * 목표 수익률(TARGET_RETURN_RATE)을 내려면 나와야 하는 도체중.
+   * = 투자비 × (1 + 목표수익률) ÷ kg당 단가.
+   * 손익분기는 300kg대라 항상 통과돼 판단에 쓸모가 없어서, 실제로 겨냥하는 선을 쓴다.
+   */
+  targetWeightAtReturn: number;
   expectedNetProfit: number;
   sampleCount: number;
   isPast: boolean;
@@ -185,6 +194,8 @@ export function projectShipping(
       additionalFeedCost,
       totalInvestmentAtShip,
       breakEvenWeight: pricePerKg > 0 ? totalInvestmentAtShip / pricePerKg : 0,
+      targetWeightAtReturn:
+        pricePerKg > 0 ? (totalInvestmentAtShip * (1 + TARGET_RETURN_RATE)) / pricePerKg : 0,
       expectedNetProfit: expectedSale - totalInvestmentAtShip,
       sampleCount: stat.count,
       isPast,
