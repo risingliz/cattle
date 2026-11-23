@@ -83,6 +83,14 @@ export interface ShipProjection {
   expectedSale: number;
   /** 오늘부터 그 시점까지 더 들어갈 사료비 */
   additionalFeedCost: number;
+  /** 현재까지 투자비 + 추가 사료비 = 출하 시점의 총 투자비 */
+  totalInvestmentAtShip: number;
+  /**
+   * 본전이 되는 도체중 = 출하 시점 총 투자비 ÷ kg당 단가.
+   * 도체중을 가정하지 않고 "몇 kg 이상 나오면 남는가"로 뒤집은 값이라
+   * 농장 평균 도체중과 비교해 바로 검증할 수 있다.
+   */
+  breakEvenWeight: number;
   expectedNetProfit: number;
   sampleCount: number;
   isPast: boolean;
@@ -145,6 +153,8 @@ export function projectShipping(
     const pricePerKg = pricePerKgOverride != null ? pricePerKgOverride * trendFactor : stat.avgPricePerKg;
     const expectedSale = stat.avgCarcassWeight * pricePerKg;
 
+    const totalInvestmentAtShip = totalInvestment + additionalFeedCost;
+
     projections.push({
       ageMonths: stat.ageMonths,
       targetDate: targetDate.toISOString().slice(0, 10),
@@ -152,7 +162,9 @@ export function projectShipping(
       expectedPricePerKg: pricePerKg,
       expectedSale,
       additionalFeedCost,
-      expectedNetProfit: expectedSale - (totalInvestment + additionalFeedCost),
+      totalInvestmentAtShip,
+      breakEvenWeight: pricePerKg > 0 ? totalInvestmentAtShip / pricePerKg : 0,
+      expectedNetProfit: expectedSale - totalInvestmentAtShip,
       sampleCount: stat.count,
       isPast,
     });

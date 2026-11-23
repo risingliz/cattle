@@ -17,10 +17,6 @@ function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
-function netClass(v: number): string {
-  return v >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
-}
-
 export default async function ShipTimingPage() {
   const today = new Date();
   const lastWeek = getTueFriForWeeksAgo(today, 0);
@@ -165,9 +161,16 @@ export default async function ShipTimingPage() {
 
       <Card title={`사육중 개체별 권장 시점 (${active.length}두)`}>
         <p className="mb-3 text-xs text-black/50 dark:text-white/50">
-          예상 판매가 = 해당 월령의 농장 평균 도체중 × kg당 단가. 초음파 예상등급이 있는 개체
-          {scannedCount > 0 && ` (${scannedCount}두)`}는 <b>그 등급의 지난주 시세</b>를, 없으면 농장 월령별 평균
-          실현단가를 씁니다. 예상 순수익은 여기서 현재까지 투자비와 그 시점까지 더 들어갈 사료비를 뺀 값입니다.
+          <b>손익분기 도체중</b> = 출하 시 투자비 ÷ kg당 단가. 이 무게 이상 나오면 남습니다. 개체별 도체중을
+          알 수 없어 예상 순수익 대신 이 값을 씁니다 —{" "}
+          {best && (
+            <>
+              농장 {best.ageMonths}개월 평균 도체중 <b>{Math.round(best.avgCarcassWeight)}kg</b>와 견줘보시면
+              됩니다.{" "}
+            </>
+          )}
+          kg당 단가는 초음파 예상등급이 있는 개체{scannedCount > 0 && ` (${scannedCount}두)`}는 그 등급의 지난주
+          시세를, 없으면 농장 월령별 평균 실현단가를 씁니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -176,14 +179,15 @@ export default async function ShipTimingPage() {
                 <th className="pb-2 pr-4">관리번호</th>
                 <th className="pb-2 pr-4">현재 월령</th>
                 <th className="pb-2 pr-4">초음파 예상등급</th>
-                <th className="pb-2 pr-4">현재 투자비</th>
                 <th className="pb-2 pr-4">권장 시점</th>
-                <th className="pb-2 pr-4">예상 순수익</th>
+                <th className="pb-2 pr-4">출하 시 투자비</th>
+                <th className="pb-2 pr-4">kg당 단가</th>
+                <th className="pb-2 pr-4">손익분기 도체중</th>
                 <th className="pb-2">상태</th>
               </tr>
             </thead>
             <tbody>
-              {active.map(({ cattle, summary, latestScan, scanPrice, rec }) => (
+              {active.map(({ cattle, latestScan, scanPrice, rec }) => (
                 <tr key={cattle.id} className="border-t border-black/5 dark:border-white/10">
                   <td className="py-2 pr-4">
                     <Link
@@ -219,13 +223,21 @@ export default async function ShipTimingPage() {
                     )}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {formatKRW(summary?.totalInvestment)}
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {rec!.best!.isPast ? "지금" : `${rec!.best!.ageMonths}개월 (${rec!.best!.targetDate})`}
                   </td>
-                  <td className={`py-2 pr-4 whitespace-nowrap tabular-nums ${netClass(rec!.best!.expectedNetProfit)}`}>
-                    {formatKRW(rec!.best!.expectedNetProfit)}
+                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
+                    {formatKRW(rec!.best!.totalInvestmentAtShip)}
+                    {rec!.best!.additionalFeedCost > 0 && (
+                      <span className="ml-1 text-xs text-black/40 dark:text-white/40">
+                        사료비 +{formatKRW(rec!.best!.additionalFeedCost)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
+                    {formatKRW(rec!.best!.expectedPricePerKg)}
+                  </td>
+                  <td className="py-2 pr-4 font-semibold whitespace-nowrap tabular-nums">
+                    {Math.round(rec!.best!.breakEvenWeight)}kg
                   </td>
                   <td className="py-2 whitespace-nowrap">
                     {rec!.overdue ? (
