@@ -57,9 +57,12 @@ function GradeBlock({ title, children }: { title: string; children: React.ReactN
 export function CattleOverviewCard({
   cattle,
   summary,
+  forceWide = false,
 }: {
   cattle: Cattle;
   summary: ProfitabilitySummary | null;
+  /** 이미지 저장용 사본에서 쓴다. 화면 폭(breakpoint)과 무관하게 항상 넓은 배치로 그린다. */
+  forceWide?: boolean;
 }) {
   const isShipped = cattle.status === "출하완료";
   const isDead = cattle.status === "폐사";
@@ -98,7 +101,7 @@ export function CattleOverviewCard({
 
       {/* 등급 — 출하 성적과 유전능력을 나란히 두어 예측이 맞았는지 바로 보이게 */}
       {(isShipped || hasEbv) && (
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className={`mt-4 grid gap-3 ${forceWide ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
           {isShipped && (
             <GradeBlock title="출하등급 (실제)">
               <div className="flex items-baseline gap-2">

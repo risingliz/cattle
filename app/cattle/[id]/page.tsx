@@ -5,13 +5,14 @@ import { calcCattleProfitability } from "@/lib/calculations";
 import { Card } from "@/components/ui/Card";
 import { SyncButton } from "@/components/cattle/SyncButton";
 import { CattleOverviewCard } from "@/components/cattle/CattleOverviewCard";
+import { CattleShareCard } from "@/components/cattle/CattleShareCard";
 import { CattleUpdateForm } from "@/components/cattle/CattleUpdateForm";
 import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { FillInputButton } from "@/components/ui/FillInputButton";
 import { EbvGradeCode } from "@/components/cattle/EbvGradeCode";
 import { deleteCattle, addExtraCost, deleteExtraCost } from "@/app/cattle/actions";
 import { inputClass, labelClass, secondaryButtonClass, dangerButtonClass } from "@/components/ui/classes";
-import { formatDate, formatKRW } from "@/lib/format";
+import { formatDate, formatKRW, getManagementNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,12 @@ export default async function CattleDetailPage({
       </div>
 
       {/* 캡처해서 공유하는 용도의 요약 카드 — 가장 먼저 둔다 */}
-      <CattleOverviewCard cattle={cattle} summary={summary} />
+      <CattleShareCard
+        fileName={`${getManagementNumber(cattle.trace_no)}_${cattle.status}`}
+        shareView={<CattleOverviewCard cattle={cattle} summary={summary} forceWide />}
+      >
+        <CattleOverviewCard cattle={cattle} summary={summary} />
+      </CattleShareCard>
 
       {cattle.genetic_synced_at && (
         <Card title="유전능력 (한국종축개량협회)" action={<EbvGradeCode cattle={cattle} size="lg" />}>
