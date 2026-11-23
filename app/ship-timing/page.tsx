@@ -5,7 +5,6 @@ import {
   bestAgeByNetProfit,
   buildAgePerformance,
   projectShipping,
-  medianRealizedReturn,
   MIN_SAMPLE,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
@@ -16,6 +15,12 @@ export const dynamic = "force-dynamic";
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
+}
+
+/** 농가가 읽기 쉬운 만원 단위. 6,644,331 -> "664만원" */
+function manwon(v: number): string {
+  const sign = v < 0 ? "-" : "";
+  return `${sign}${Math.abs(Math.round(v / 10000)).toLocaleString("ko-KR")}만원`;
 }
 
 export default async function ShipTimingPage() {
@@ -56,9 +61,13 @@ export default async function ShipTimingPage() {
   // 같은 값이 반복되므로 표에서 제외한다.
   const scanned = active.filter((a) => a.latestScan?.predicted_grade);
 
-  // 눈금을 읽는 기준점: 권장 월령의 농장 평균 도체중, 그리고 실현 수익률 중앙값
+  // 기준점: 권장 월령의 농장 평균 도체중
   const refWeight = best?.avgCarcassWeight ?? null;
-  const medianReturn = medianRealizedReturn(items);
+  // 도체중이 얼마 나오느냐에 따라 남는 돈이 어떻게 달라지는지 보여줄 눈금.
+  // 농장 실제 출하 도체중이 328~677kg이라 그 안쪽으로 잡는다.
+  const weightLadder = Array.from(
+    new Set([450, refWeight != null ? Math.round(refWeight) : 520, 600])
+  ).sort((a, b) => a - b);
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -168,20 +177,20 @@ export default async function ShipTimingPage() {
 
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
-          초음파 예상등급이 있는 개체만 표시합니다. 큰 숫자는{" "}
-          <b>농장 {best?.ageMonths}개월 평균 도체중 {refWeight != null && `${Math.round(refWeight)}kg`}</b>로
-          나왔을 때의 수익률이고, 막대는 지금까지 출하한 개체의 중앙값
-          {medianReturn != null && <> <b>{Math.round(medianReturn)}%</b></>}와 견준 것입니다. 아래 줄은 그
-          수익률을 내려면 나와야 하는 도체중입니다.
+          초음파 예상등급이 있는 개체만 표시합니다. 도체중이 얼마나 나올지는 미리 알 수 없으니,{" "}
+          <b>도체중별로 남는 돈</b>을 나열했습니다 — 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐입니다.
+          {refWeight != null && (
+            <>
+              {" "}
+              가운데 <b>{Math.round(refWeight)}kg</b>은 농장 {best?.ageMonths}개월 평균 도체중입니다.
+            </>
+          )}{" "}
+          kg당 단가는 초음파 예상등급의 지난주 음성공판장 시세입니다.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {scanned.map(({ cattle, latestScan, rec }) => {
             const price = rec!.best!.expectedPricePerKg;
             const invest = rec!.best!.totalInvestmentAtShip;
-            // 농장 평균 도체중으로 나왔을 때의 수익률 — 이 카드의 핵심 숫자
-            const expectedReturn =
-              refWeight != null && invest > 0 ? ((refWeight * price - invest) / invest) * 100 : null;
-            const aboveMedian = expectedReturn != null && medianReturn != null && expectedReturn >= medianReturn;
 
             return (
               <div
@@ -217,56 +226,40 @@ export default async function ShipTimingPage() {
                 <div className="text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
                   {rec!.currentAgeMonths}개월
                   {latestScan!.back_fat_mm != null && ` · 등지방 ${latestScan!.back_fat_mm}mm`}
-                  {` · kg당 ${formatKRW(price)}`}
-                  {` · 투자비 ${formatKRW(invest)}`}
+                  {` · kg당 ${formatKRW(price)} · 투자비 ${formatKRW(invest)}`}
                 </div>
 
-                {expectedReturn != null && (
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span
-                        className={`font-mono text-3xl font-bold tabular-nums ${
-                          aboveMedian ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"
-                        }`}
-                      >
-                        {Math.round(expectedReturn)}%
-                      </span>
-                      <span className="text-xs text-black/50 dark:text-white/50">
-                        {Math.round(refWeight!)}kg 나오면
-                      </span>
-                    </div>
-                    {/* 농장 중앙값과 견주는 막대 */}
-                    <div className="relative mt-1.5 h-2 overflow-hidden rounded bg-black/5 dark:bg-white/10">
-                      <div
-                        className={`h-full rounded ${aboveMedian ? "bg-green-500/70" : "bg-black/50 dark:bg-white/50"}`}
-                        style={{ width: `${Math.max(2, Math.min(100, (expectedReturn / 120) * 100))}%` }}
-                      />
-                      {medianReturn != null && (
-                        <div
-                          className="absolute top-0 h-full w-0.5 bg-black/60 dark:bg-white/60"
-                          style={{ left: `${Math.min(100, (medianReturn / 120) * 100)}%` }}
-                          title={`농장 중앙값 ${Math.round(medianReturn)}%`}
-                        />
-                      )}
-                    </div>
+                {/* 도체중이 얼마 나오면 얼마 남는지 — 계산이 그대로 드러나게 */}
+                <div className="border-t border-black/5 pt-2 dark:border-white/10">
+                  <div className="mb-1 text-xs text-black/50 dark:text-white/50">
+                    도체중이 이만큼 나오면 남는 돈
                   </div>
-                )}
-
-                <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-black/5 pt-2 text-xs tabular-nums dark:border-white/10">
-                  {rec!.best!.targetWeights.map(({ rate, weight }) => {
-                    const reachable = refWeight != null && weight <= refWeight;
-                    return (
-                      <span
-                        key={rate}
-                        className={`whitespace-nowrap ${
-                          reachable ? "font-semibold" : "text-black/35 dark:text-white/35"
-                        }`}
-                      >
-                        <span className="text-black/50 dark:text-white/50">{Math.round(rate * 100)}%</span>{" "}
-                        {Math.round(weight)}kg
-                      </span>
-                    );
-                  })}
+                  <div className="flex items-end justify-between gap-2">
+                    {weightLadder.map((w) => {
+                      const profit = w * price - invest;
+                      const isRef = refWeight != null && w === Math.round(refWeight);
+                      return (
+                        <div key={w} className="flex flex-col items-center">
+                          <span
+                            className={`font-mono font-semibold whitespace-nowrap tabular-nums ${
+                              isRef ? "text-xl" : "text-sm text-black/60 dark:text-white/60"
+                            } ${profit < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                          >
+                            {manwon(profit)}
+                          </span>
+                          <span
+                            className={`mt-0.5 text-[11px] whitespace-nowrap tabular-nums ${
+                              isRef
+                                ? "font-semibold text-black/70 dark:text-white/70"
+                                : "text-black/40 dark:text-white/40"
+                            }`}
+                          >
+                            {w}kg{isRef && " 평균"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             );
