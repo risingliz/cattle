@@ -19,6 +19,26 @@
   }
 }
 
+/*
+ * 이미지로 저장하는 사본은 기기의 다크모드 설정과 무관하게 항상 밝은 배경으로 그린다.
+ * (외부로 공유하는 이미지라 어두운 배경이면 읽기 불편함)
+ * dark: 유틸리티가 [data-capture-light] 안에서는 적용되지 않도록 변형 자체를 재정의한다.
+ */
+@custom-variant dark {
+  @media (prefers-color-scheme: dark) {
+    &:where(:not([data-capture-light]):not([data-capture-light] *)) {
+      @slot;
+    }
+  }
+}
+
+[data-capture-light] {
+  --background: #ffffff;
+  --foreground: #171717;
+  color-scheme: light;
+  color: var(--foreground);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

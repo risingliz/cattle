@@ -34,10 +34,10 @@ export function CattleShareCard({
     setSavedHint(null);
     setBusy(true);
     try {
-      const isDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+      // 공유용 이미지는 기기 설정과 무관하게 항상 밝은 배경으로 (data-capture-light 참고)
       const blob = await toBlob(node, {
         pixelRatio: 2,
-        backgroundColor: isDark ? "#0a0a0a" : "#ffffff",
+        backgroundColor: "#ffffff",
         cacheBust: true,
       });
       if (!blob) throw new Error("이미지를 만들지 못했습니다.");
@@ -80,7 +80,7 @@ export function CattleShareCard({
 
       {/* 캡처 전용 사본 — 화면 밖에 두되 display:none은 쓰지 않는다(레이아웃이 계산되어야 함). */}
       <div aria-hidden className="pointer-events-none fixed top-0 left-[-10000px]">
-        <div ref={shotRef} style={{ width: SHARE_WIDTH }} className="bg-white p-4 dark:bg-[#0a0a0a]">
+        <div ref={shotRef} data-capture-light style={{ width: SHARE_WIDTH }} className="bg-white p-4">
           {shareView}
         </div>
       </div>

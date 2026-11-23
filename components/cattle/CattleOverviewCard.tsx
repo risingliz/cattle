@@ -5,6 +5,13 @@ import { calcFeedingStage, calcMonthsBetween, type ProfitabilitySummary } from "
 import { formatInt, formatKRW, formatPercent, getEbvGradeCode, getManagementNumber } from "@/lib/format";
 import type { Cattle } from "@/lib/types";
 
+/** 입식 체중과(알 수 있으면) kg당 입식 단가. 체중이 없으면 표시하지 않는다. */
+function intakeHint(price: number | null, weight: number | null): string | undefined {
+  if (weight == null) return undefined;
+  if (price == null) return `${weight}kg`;
+  return `${weight}kg · kg당 ${formatKRW(price / weight)}`;
+}
+
 function moneyClass(v: number | null | undefined): string {
   if (v == null) return "";
   return v >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400";
@@ -137,7 +144,11 @@ export function CattleOverviewCard({
       {/* 비용 구성 → 판매가 → 순수익 */}
       {summary ? (
         <div className="mt-4">
-          <MoneyRow label="송아지 구매비용" value={formatKRW(cattle.intake_price)} />
+          <MoneyRow
+            label="송아지 구매비용"
+            hint={intakeHint(cattle.intake_price, cattle.intake_weight)}
+            value={formatKRW(cattle.intake_price)}
+          />
           <MoneyRow
             label="사료비"
             hint={`${formatInt(summary.daysHeld)}일`}
