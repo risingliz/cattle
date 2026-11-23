@@ -60,22 +60,19 @@ export default async function ShipTimingPage() {
 
   // 도체중 슬라이더 + 육질등급 전환은 클라이언트에서 다시 계산하므로, 등급별 시세를 그대로 넘긴다.
   const explorerPrices: Record<string, number | null> = Object.fromEntries(gradePrices ?? []);
-  const explorerAnimals: ExplorerAnimal[] = scanned.map(({ cattle, latestScan, rec }) => ({
+  const explorerAnimals: ExplorerAnimal[] = scanned.map(({ cattle, summary, latestScan, rec }) => ({
     id: cattle.id,
     traceNo: cattle.trace_no,
     ageMonths: rec!.currentAgeMonths,
     backFatMm: latestScan!.back_fat_mm,
     scanGrade: latestScan!.predicted_grade!,
     upgradableGrade: latestScan!.upgradable_grade,
-    investment: rec!.best!.totalInvestmentAtShip,
+    // 카드 전체를 "오늘 출하한다면" 기준으로 맞춘다. kg당 단가는 지난주 시세이고 육질등급도
+    // 지금 측정값이므로, 투자비와 보유기간만 미래(예상 출하일)로 잡으면 기준이 섞인다.
+    // 앞으로 더 들어갈 사료비는 빼고 오늘까지 쓴 돈, 오늘까지 키운 날수만 쓴다.
+    investment: summary!.totalInvestment,
     isPast: rec!.best!.isPast,
-    // 투자비가 출하 시점 기준이므로 보유기간도 입식일 ~ 예상 출하일로 맞춘다.
-    daysHeld: cattle.intake_date
-      ? Math.round(
-          (new Date(rec!.best!.targetDate).getTime() - new Date(cattle.intake_date).getTime()) /
-            86_400_000
-        )
-      : null,
+    daysHeld: summary!.daysHeld,
   }));
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
@@ -187,8 +184,9 @@ export default async function ShipTimingPage() {
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
           초음파 예상등급이 있는 개체만 표시합니다. 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐이고,
-          금액 옆 %는 <b>투자비 대비 수익률</b>, 괄호 안 <b>연 ○%</b>는 입식일부터 출하까지 걸린 기간으로 나눈
-          연환산입니다 (지금 개체들은 입식한 지 2년 가까워 대략 절반이 됩니다). 도체중은 슬라이더로 맞춰보실 수
+          금액 옆 %는 <b>투자비 대비 수익률</b>, 괄호 안 <b>연 ○%</b>는 입식일부터 오늘까지 키운 날수로 나눈
+          연환산입니다 (지금 개체들은 입식한 지 2년 가까워 대략 절반이 됩니다). 모두 <b>오늘 출하한다면</b> 기준이라
+          투자비도 오늘까지 쓴 금액이고, 더 키우시면 사료비만큼 늘어납니다. 도체중은 슬라이더로 맞춰보실 수
           있고, 육질등급은 더 비육하면
           올라갈 수 있으니 개체별로 바꿔볼 수 있게 했습니다. (육량등급은 거의 바뀌지 않으므로 초음파 측정값으로
           고정됩니다.)
