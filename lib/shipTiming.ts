@@ -96,10 +96,31 @@ export interface ShipProjection {
   isPast: boolean;
 }
 
+/**
+ * "한 달 더 키울까, 지금 내보낼까"를 판단하기 위한 한계(marginal) 비교.
+ * 총액이 아니라 한 달치 증분만 보기 때문에 숫자가 작고 현장 감각과 바로 맞춰볼 수 있다.
+ */
+export interface MarginalStep {
+  fromMonth: number;
+  toMonth: number;
+  /** 한 달 더 키울 때 들어가는 사료비 */
+  feedCost: number;
+  /** 사료비만 메우려면 늘어야 하는 도체중 */
+  requiredGainKg: number;
+  /** 농장 실적상 그 구간에서 실제로 늘어난 평균 도체중 */
+  farmGainKg: number | null;
+  /** 농장 실적상 그 구간의 실현단가 변화 (원/kg). 음수면 등급이 떨어졌다는 뜻 */
+  farmPriceChangePerKg: number | null;
+  /** 농장 실적 증체가 본전 증체를 넘는지 */
+  worthIt: boolean | null;
+}
+
 export interface ShipRecommendation {
   currentAgeMonths: number;
   projections: ShipProjection[];
   best: ShipProjection | null;
+  /** 지금 월령에서 한 달 더 키웠을 때의 손익 비교 */
+  marginal: MarginalStep | null;
   /** 권장 시점을 이미 지났는지 */
   overdue: boolean;
 }
@@ -175,10 +196,46 @@ export function projectShipping(
   const best = projections.reduce((b, p) => (p.expectedNetProfit > b.expectedNetProfit ? p : b));
   const bestOverall = bestAgeByNetProfit(stats);
 
+  // 한 달 더 키울 때의 증분 비교.
+  // 표본이 3두 미만인 월령이 중간에 비어 있으므로, 현재 월령을 사이에 두는 두 신뢰 구간을
+  // 찾아 그 사이 변화를 개월 수로 나눠 "월평균"으로 환산한다.
+  const reliable = stats.filter((s) => s.reliable);
+  const nextIdx = reliable.findIndex((s) => s.ageMonths > currentAgeMonths);
+  let marginal: MarginalStep | null = null;
+
+  // 출하 실적이 있는 구간 근처(=출하를 고민할 시기)에서만 비교한다.
+  // 비육 후기 증체량을 어린 개체에 갖다 붙이면 완전히 다른 이야기가 된다.
+  const inDecisionZone = reliable.length > 0 && currentAgeMonths >= reliable[0].ageMonths - 1;
+
+  if (nextIdx >= 0 && inDecisionZone) {
+    const from = nextIdx === 0 ? reliable[0] : reliable[nextIdx - 1];
+    const to = nextIdx === 0 ? reliable[1] : reliable[nextIdx];
+    const span = to && from ? to.ageMonths - from.ageMonths : 0;
+
+    const monthStart = addMonths(birth, currentAgeMonths - 1);
+    const monthEnd = addMonths(birth, currentAgeMonths);
+    const monthFeed = calcFeedCost(monthStart > today ? today : monthStart, monthEnd, feedCostPeriods);
+    const pricePerKg =
+      pricePerKgOverride ?? baseStat?.avgPricePerKg ?? reliable[Math.max(nextIdx - 1, 0)].avgPricePerKg;
+    const requiredGainKg = pricePerKg > 0 ? monthFeed / pricePerKg : 0;
+    const farmGainKg = span > 0 ? (to.avgCarcassWeight - from.avgCarcassWeight) / span : null;
+
+    marginal = {
+      fromMonth: currentAgeMonths,
+      toMonth: currentAgeMonths + 1,
+      feedCost: monthFeed,
+      requiredGainKg,
+      farmGainKg,
+      farmPriceChangePerKg: span > 0 ? (to.avgPricePerKg - from.avgPricePerKg) / span : null,
+      worthIt: farmGainKg != null ? farmGainKg >= requiredGainKg : null,
+    };
+  }
+
   return {
     currentAgeMonths,
     projections,
     best,
+    marginal,
     // 농장 전체 기준 최적 월령을 이미 넘겼으면 "적기 지남"
     overdue: bestOverall != null && currentAgeMonths > bestOverall.ageMonths,
   };

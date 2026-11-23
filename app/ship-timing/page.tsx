@@ -161,16 +161,11 @@ export default async function ShipTimingPage() {
 
       <Card title={`사육중 개체별 권장 시점 (${active.length}두)`}>
         <p className="mb-3 text-xs text-black/50 dark:text-white/50">
-          <b>손익분기 도체중</b> = 출하 시 투자비 ÷ kg당 단가. 이 무게 이상 나오면 남습니다. 개체별 도체중을
-          알 수 없어 예상 순수익 대신 이 값을 씁니다 —{" "}
-          {best && (
-            <>
-              농장 {best.ageMonths}개월 평균 도체중 <b>{Math.round(best.avgCarcassWeight)}kg</b>와 견줘보시면
-              됩니다.{" "}
-            </>
-          )}
-          kg당 단가는 초음파 예상등급이 있는 개체{scannedCount > 0 && ` (${scannedCount}두)`}는 그 등급의 지난주
-          시세를, 없으면 농장 월령별 평균 실현단가를 씁니다.
+          <b>한 달 더 키울지</b>를 증분으로 비교합니다. <b>본전 증체</b> = 한 달 사료비 ÷ kg당 단가, 즉 사료비만
+          메우려면 그 달에 늘어야 하는 도체중입니다. 옆의 <b>농장 실적</b>은 출하 실적에서 실제로 그 구간에 늘어난
+          평균 도체중이라, 두 값을 견주면 더 키우는 게 남는지 바로 보입니다. kg당 단가는 초음파 예상등급이 있는
+          개체{scannedCount > 0 && ` (${scannedCount}두)`}는 그 등급의 지난주 시세를, 없으면 농장 월령별 평균
+          실현단가를 씁니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -179,11 +174,11 @@ export default async function ShipTimingPage() {
                 <th className="pb-2 pr-4">관리번호</th>
                 <th className="pb-2 pr-4">현재 월령</th>
                 <th className="pb-2 pr-4">초음파 예상등급</th>
-                <th className="pb-2 pr-4">권장 시점</th>
-                <th className="pb-2 pr-4">출하 시 투자비</th>
                 <th className="pb-2 pr-4">kg당 단가</th>
-                <th className="pb-2 pr-4">손익분기 도체중</th>
-                <th className="pb-2">상태</th>
+                <th className="pb-2 pr-4">한 달 사료비</th>
+                <th className="pb-2 pr-4">본전 증체</th>
+                <th className="pb-2 pr-4">농장 실적 증체</th>
+                <th className="pb-2">권장</th>
               </tr>
             </thead>
             <tbody>
@@ -223,21 +218,29 @@ export default async function ShipTimingPage() {
                     )}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {rec!.best!.isPast ? "지금" : `${rec!.best!.ageMonths}개월 (${rec!.best!.targetDate})`}
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {formatKRW(rec!.best!.totalInvestmentAtShip)}
-                    {rec!.best!.additionalFeedCost > 0 && (
-                      <span className="ml-1 text-xs text-black/40 dark:text-white/40">
-                        사료비 +{formatKRW(rec!.best!.additionalFeedCost)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {formatKRW(rec!.best!.expectedPricePerKg)}
                   </td>
+                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
+                    {rec!.marginal ? formatKRW(rec!.marginal.feedCost) : "-"}
+                  </td>
+                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
+                    {rec!.marginal ? `+${rec!.marginal.requiredGainKg.toFixed(1)}kg` : "-"}
+                  </td>
                   <td className="py-2 pr-4 font-semibold whitespace-nowrap tabular-nums">
-                    {Math.round(rec!.best!.breakEvenWeight)}kg
+                    {rec!.marginal?.farmGainKg != null ? (
+                      <span className={rec!.marginal.worthIt ? "" : "text-red-600 dark:text-red-400"}>
+                        {rec!.marginal.farmGainKg >= 0 ? "+" : ""}
+                        {rec!.marginal.farmGainKg.toFixed(0)}kg
+                        {rec!.marginal.farmPriceChangePerKg != null && (
+                          <span className="ml-1 text-xs font-normal text-black/40 dark:text-white/40">
+                            단가 {rec!.marginal.farmPriceChangePerKg >= 0 ? "+" : ""}
+                            {Math.round(rec!.marginal.farmPriceChangePerKg).toLocaleString()}원
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-normal text-black/30 dark:text-white/30">실적 없음</span>
+                    )}
                   </td>
                   <td className="py-2 whitespace-nowrap">
                     {rec!.overdue ? (
