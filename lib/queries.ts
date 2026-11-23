@@ -1,10 +1,12 @@
 import { getSupabaseServerClient } from "./supabase/server";
 import { calcCattleProfitability, type ProfitabilitySummary } from "./calculations";
-import type { Cattle, ExtraCost, FeedCostPeriod, Pen } from "./types";
+import type { Cattle, ExtraCost, FeedCostPeriod, Pen, UltrasoundScan } from "./types";
 
 export interface CattleWithSummary {
   cattle: Cattle;
   summary: ProfitabilitySummary | null;
+  /** 가장 최근 초음파 육질진단 결과 (없으면 null) */
+  latestScan: UltrasoundScan | null;
 }
 
 /** 전체 개체 + 계산된 수익성 요약. 대시보드/목록 페이지에서 공용으로 사용. */
@@ -13,25 +15,36 @@ export async function getAllCattleWithProfitability(): Promise<{
   pens: Pen[];
   extraByCattle: Map<string, ExtraCost[]>;
   feedCostPeriods: FeedCostPeriod[];
+  scansByCattle: Map<string, UltrasoundScan[]>;
 }> {
   const supabase = getSupabaseServerClient();
 
-  const [cattleRes, extraCostRes, periodRes, penRes] = await Promise.all([
+  const [cattleRes, extraCostRes, periodRes, penRes, scanRes] = await Promise.all([
     supabase.from("cattle").select("*").order("created_at", { ascending: false }),
     supabase.from("extra_costs").select("*"),
     supabase.from("feed_cost_periods").select("*"),
     supabase.from("pens").select("*").order("name"),
+    supabase.from("ultrasound_scans").select("*").order("scan_date", { ascending: false }),
   ]);
 
   if (cattleRes.error) throw new Error(`개체 목록 조회 실패: ${cattleRes.error.message}`);
   if (extraCostRes.error) throw new Error(`기타비용 조회 실패: ${extraCostRes.error.message}`);
   if (periodRes.error) throw new Error(`사육비 이력 조회 실패: ${periodRes.error.message}`);
   if (penRes.error) throw new Error(`우방 조회 실패: ${penRes.error.message}`);
+  if (scanRes.error) throw new Error(`초음파 측정 조회 실패: ${scanRes.error.message}`);
 
   const cattle = cattleRes.data ?? [];
   const extraCosts = extraCostRes.data ?? [];
   const periods = periodRes.data ?? [];
   const pens = penRes.data ?? [];
+
+  // scan_date 내림차순으로 받았으므로 각 개체의 첫 항목이 최신 측정이다.
+  const scansByCattle = new Map<string, UltrasoundScan[]>();
+  for (const scan of scanRes.data ?? []) {
+    const list = scansByCattle.get(scan.cattle_id) ?? [];
+    list.push(scan);
+    scansByCattle.set(scan.cattle_id, list);
+  }
 
   const extraByCattle = new Map<string, ExtraCost[]>();
   for (const ec of extraCosts) {
@@ -43,7 +56,8 @@ export async function getAllCattleWithProfitability(): Promise<{
   const items: CattleWithSummary[] = cattle.map((c) => ({
     cattle: c,
     summary: calcCattleProfitability(c, extraByCattle.get(c.id) ?? [], periods),
+    latestScan: scansByCattle.get(c.id)?.[0] ?? null,
   }));
 
-  return { items, pens, extraByCattle, feedCostPeriods: periods };
+  return { items, pens, extraByCattle, feedCostPeriods: periods, scansByCattle };
 }

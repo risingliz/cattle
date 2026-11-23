@@ -110,12 +110,24 @@ export function projectShipping(
   totalInvestment: number,
   stats: AgeStat[],
   feedCostPeriods: FeedCostPeriod[],
-  today: Date
+  today: Date,
+  /**
+   * 초음파 예상등급이 있으면 그 등급의 현재 시세(원/kg)를 넘긴다.
+   * 농장 월령 평균 단가는 과거 시세·과거 등급이 섞인 값이라, 개체별 예상등급을
+   * 아는 경우에는 이쪽이 더 정확하다.
+   */
+  pricePerKgOverride?: number | null
 ): ShipRecommendation | null {
   if (!cattle.birth_date) return null;
 
   const birth = new Date(cattle.birth_date);
   const currentAgeMonths = calcMonthsBetween(birth, today);
+
+  // 초음파 등급은 "지금" 기준 스냅샷이다. 그 값을 모든 월령에 그대로 쓰면
+  // 월령별로 달라지는 건 도체중뿐이라 항상 가장 무거운 월령을 권하게 된다.
+  // 농장 실적에서 관찰되는 월령별 단가 추세를 곱해 그 편향을 걷어낸다.
+  const baseStat = stats.find((s) => s.reliable && s.ageMonths === currentAgeMonths);
+  const trendFrom = baseStat?.avgPricePerKg ?? null;
 
   const projections: ShipProjection[] = [];
   for (const stat of stats) {
@@ -128,13 +140,16 @@ export function projectShipping(
     const isPast = reachedAt <= today;
     const targetDate = isPast ? today : reachedAt;
     const additionalFeedCost = calcFeedCost(today, targetDate, feedCostPeriods);
-    const expectedSale = stat.avgCarcassWeight * stat.avgPricePerKg;
+    const trendFactor =
+      pricePerKgOverride != null && trendFrom ? stat.avgPricePerKg / trendFrom : 1;
+    const pricePerKg = pricePerKgOverride != null ? pricePerKgOverride * trendFactor : stat.avgPricePerKg;
+    const expectedSale = stat.avgCarcassWeight * pricePerKg;
 
     projections.push({
       ageMonths: stat.ageMonths,
       targetDate: targetDate.toISOString().slice(0, 10),
       expectedCarcassWeight: stat.avgCarcassWeight,
-      expectedPricePerKg: stat.avgPricePerKg,
+      expectedPricePerKg: pricePerKg,
       expectedSale,
       additionalFeedCost,
       expectedNetProfit: expectedSale - (totalInvestment + additionalFeedCost),

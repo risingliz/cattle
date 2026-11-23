@@ -24,17 +24,23 @@ export default async function CattleDetailPage({
   const { id } = await params;
   const supabase = getSupabaseServerClient();
 
-  const [{ data: cattle }, { data: pens }, { data: extraCosts }, { data: periods }] =
+  const [{ data: cattle }, { data: pens }, { data: extraCosts }, { data: periods }, { data: scans }] =
     await Promise.all([
       supabase.from("cattle").select("*").eq("id", id).maybeSingle(),
       supabase.from("pens").select("*").order("name"),
       supabase.from("extra_costs").select("*").eq("cattle_id", id).order("cost_date", { ascending: false }),
       supabase.from("feed_cost_periods").select("*"),
+      supabase
+        .from("ultrasound_scans")
+        .select("*")
+        .eq("cattle_id", id)
+        .order("scan_date", { ascending: false }),
     ]);
 
   if (!cattle) notFound();
 
   const summary = calcCattleProfitability(cattle, extraCosts ?? [], periods ?? []);
+  const latestScan = (scans ?? [])[0] ?? null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,9 +68,11 @@ export default async function CattleDetailPage({
       {/* 캡처해서 공유하는 용도의 요약 카드 — 가장 먼저 둔다 */}
       <CattleShareCard
         fileName={`${getManagementNumber(cattle.trace_no)}_${cattle.status}`}
-        shareView={<CattleOverviewCard cattle={cattle} summary={summary} forceWide />}
+        shareView={
+          <CattleOverviewCard cattle={cattle} summary={summary} latestScan={latestScan} forceWide />
+        }
       >
-        <CattleOverviewCard cattle={cattle} summary={summary} />
+        <CattleOverviewCard cattle={cattle} summary={summary} latestScan={latestScan} />
       </CattleShareCard>
 
       {cattle.genetic_synced_at && (

@@ -8,6 +8,7 @@ import {
   MIN_SAMPLE,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
+import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
 import { formatKRW, formatPercent, getManagementNumber } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -21,26 +22,40 @@ function netClass(v: number): string {
 }
 
 export default async function ShipTimingPage() {
-  const { items, feedCostPeriods } = await getAllCattleWithProfitability();
   const today = new Date();
+  const lastWeek = getTueFriForWeeksAgo(today, 0);
+
+  const [{ items, feedCostPeriods }, gradePrices] = await Promise.all([
+    getAllCattleWithProfitability(),
+    fetchAllGradePricesPerKg(lastWeek.start, lastWeek.end).catch(() => null),
+  ]);
 
   const stats = buildAgePerformance(items);
   const best = bestAgeByNetProfit(stats);
   const maxNet = Math.max(1, ...stats.filter((s) => s.reliable).map((s) => s.avgNetProfit));
 
-  // 사육중 개체별 권장 출하 시점
+  // 사육중 개체별 권장 출하 시점.
+  // 초음파 예상등급이 있으면 그 등급의 현재 시세를 써서 개체별로 계산한다.
   const active = items
     .filter(({ cattle }) => cattle.status === "사육중" && cattle.birth_date)
-    .map(({ cattle, summary }) => ({
-      cattle,
-      summary,
-      rec:
-        summary != null
-          ? projectShipping(cattle, summary.totalInvestment, stats, feedCostPeriods, today)
-          : null,
-    }))
+    .map(({ cattle, summary, latestScan }) => {
+      const scanGrade = latestScan?.predicted_grade ?? null;
+      const scanPrice = scanGrade ? (gradePrices?.get(scanGrade) ?? null) : null;
+      return {
+        cattle,
+        summary,
+        latestScan,
+        scanPrice,
+        rec:
+          summary != null
+            ? projectShipping(cattle, summary.totalInvestment, stats, feedCostPeriods, today, scanPrice)
+            : null,
+      };
+    })
     .filter((r) => r.rec != null)
     .sort((a, b) => calcMonthsBetween(new Date(b.cattle.birth_date!), today) - calcMonthsBetween(new Date(a.cattle.birth_date!), today));
+
+  const scannedCount = active.filter((a) => a.latestScan).length;
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -150,8 +165,9 @@ export default async function ShipTimingPage() {
 
       <Card title={`사육중 개체별 권장 시점 (${active.length}두)`}>
         <p className="mb-3 text-xs text-black/50 dark:text-white/50">
-          예상 판매가 = 해당 월령의 농장 평균 도체중 × 평균 실현 kg당 단가. 예상 순수익은 여기서 현재까지
-          투자비와 그 시점까지 더 들어갈 사료비를 뺀 값입니다.
+          예상 판매가 = 해당 월령의 농장 평균 도체중 × kg당 단가. 초음파 예상등급이 있는 개체
+          {scannedCount > 0 && ` (${scannedCount}두)`}는 <b>그 등급의 지난주 시세</b>를, 없으면 농장 월령별 평균
+          실현단가를 씁니다. 예상 순수익은 여기서 현재까지 투자비와 그 시점까지 더 들어갈 사료비를 뺀 값입니다.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -159,6 +175,7 @@ export default async function ShipTimingPage() {
               <tr className="text-left text-black/60 dark:text-white/60">
                 <th className="pb-2 pr-4">관리번호</th>
                 <th className="pb-2 pr-4">현재 월령</th>
+                <th className="pb-2 pr-4">초음파 예상등급</th>
                 <th className="pb-2 pr-4">현재 투자비</th>
                 <th className="pb-2 pr-4">권장 시점</th>
                 <th className="pb-2 pr-4">예상 순수익</th>
@@ -166,7 +183,7 @@ export default async function ShipTimingPage() {
               </tr>
             </thead>
             <tbody>
-              {active.map(({ cattle, summary, rec }) => (
+              {active.map(({ cattle, summary, latestScan, scanPrice, rec }) => (
                 <tr key={cattle.id} className="border-t border-black/5 dark:border-white/10">
                   <td className="py-2 pr-4">
                     <Link
@@ -178,6 +195,28 @@ export default async function ShipTimingPage() {
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {rec!.currentAgeMonths}개월
+                  </td>
+                  <td className="py-2 pr-4 whitespace-nowrap">
+                    {latestScan?.predicted_grade ? (
+                      <span className="tabular-nums">
+                        <span className="font-mono font-semibold">{latestScan.predicted_grade}</span>
+                        {latestScan.upgradable_grade && (
+                          <span className="ml-1 text-xs text-black/50 dark:text-white/50">
+                            →{latestScan.upgradable_grade}
+                          </span>
+                        )}
+                        {latestScan.back_fat_mm != null && (
+                          <span className="ml-1 text-xs text-black/40 dark:text-white/40">
+                            등지방 {latestScan.back_fat_mm}mm
+                          </span>
+                        )}
+                        {scanPrice == null && (
+                          <span className="ml-1 text-xs text-black/40 dark:text-white/40">(시세없음)</span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-black/30 dark:text-white/30">-</span>
+                    )}
                   </td>
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {formatKRW(summary?.totalInvestment)}

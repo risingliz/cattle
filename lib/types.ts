@@ -77,6 +77,25 @@ export interface Cattle {
   updated_at: string;
 }
 
+/** 출하 전 초음파 육질진단 결과. 한 개체를 여러 번 측정할 수 있다. */
+export interface UltrasoundScan {
+  id: string;
+  cattle_id: string;
+  scan_date: string;
+  /** 등지방두께 (mm) */
+  back_fat_mm: number | null;
+  /** 등심단면적 (cm²) */
+  ribeye_area_cm2: number | null;
+  /** 근내지방번호 BMS 1~9 */
+  bms: number | null;
+  /** 측정 시점 기준 예상 육질등급 */
+  predicted_grade: string | null;
+  /** 더 비육했을 때 도달 가능한 상향 등급 */
+  upgradable_grade: string | null;
+  memo: string | null;
+  created_at: string;
+}
+
 export interface ExtraCost {
   id: string;
   cattle_id: string;

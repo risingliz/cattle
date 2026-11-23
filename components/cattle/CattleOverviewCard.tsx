@@ -3,7 +3,7 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EbvGradeCode } from "@/components/cattle/EbvGradeCode";
 import { calcFeedingStage, calcMonthsBetween, type ProfitabilitySummary } from "@/lib/calculations";
 import { formatInt, formatKRW, formatPercent, getEbvGradeCode, getManagementNumber } from "@/lib/format";
-import type { Cattle } from "@/lib/types";
+import type { Cattle, UltrasoundScan } from "@/lib/types";
 
 /** 입식 체중과(알 수 있으면) kg당 입식 단가. 체중이 없으면 표시하지 않는다. */
 function intakeHint(price: number | null, weight: number | null): string | undefined {
@@ -64,10 +64,13 @@ function GradeBlock({ title, children }: { title: string; children: React.ReactN
 export function CattleOverviewCard({
   cattle,
   summary,
+  latestScan = null,
   forceWide = false,
 }: {
   cattle: Cattle;
   summary: ProfitabilitySummary | null;
+  /** 가장 최근 초음파 육질진단 결과 */
+  latestScan?: UltrasoundScan | null;
   /** 이미지 저장용 사본에서 쓴다. 화면 폭(breakpoint)과 무관하게 항상 넓은 배치로 그린다. */
   forceWide?: boolean;
 }) {
@@ -106,8 +109,8 @@ export function CattleOverviewCard({
         {!isShipped && !isDead && ageMonths != null && ` (${calcFeedingStage(ageMonths)})`}
       </div>
 
-      {/* 등급 — 출하 성적과 유전능력을 나란히 두어 예측이 맞았는지 바로 보이게 */}
-      {(isShipped || hasEbv) && (
+      {/* 등급 — 출하 성적·초음파 예상·유전능력을 나란히 두어 예측이 맞았는지 바로 보이게 */}
+      {(isShipped || hasEbv || latestScan) && (
         <div className={`mt-4 grid gap-3 ${forceWide ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
           {isShipped && (
             <GradeBlock title="출하등급 (실제)">
@@ -123,6 +126,24 @@ export function CattleOverviewCard({
                 도체중 {cattle.carcass_weight != null ? `${cattle.carcass_weight}kg` : "-"}
                 {cattle.wgrade && ` · 육량 ${cattle.wgrade}`}
                 {cattle.windex != null && ` · 육량지수 ${cattle.windex}`}
+              </div>
+            </GradeBlock>
+          )}
+
+          {latestScan && (
+            <GradeBlock title={`초음파 예상등급 (${latestScan.scan_date})`}>
+              <div className="flex items-baseline gap-2">
+                <span className="font-mono text-2xl font-bold">{latestScan.predicted_grade ?? "-"}</span>
+                {latestScan.upgradable_grade && (
+                  <span className="text-xs whitespace-nowrap text-black/50 dark:text-white/50">
+                    → 상향 {latestScan.upgradable_grade}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+                {latestScan.bms != null && `BMS ${latestScan.bms} · `}
+                {latestScan.back_fat_mm != null && `등지방 ${latestScan.back_fat_mm}mm`}
+                {latestScan.ribeye_area_cm2 != null && ` · 단면적 ${latestScan.ribeye_area_cm2}㎠`}
               </div>
             </GradeBlock>
           )}

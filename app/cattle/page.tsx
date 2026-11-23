@@ -123,9 +123,10 @@ export default async function CattleListPage({
         return false;
       return true;
     })
-    .map(({ cattle, summary }) => ({
+    .map(({ cattle, summary, latestScan }) => ({
       cattle,
       summary,
+      latestScan,
       ageMonths: cattle.birth_date ? calcMonthsBetween(new Date(cattle.birth_date), today) : null,
     }));
 
