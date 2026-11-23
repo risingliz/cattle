@@ -7,7 +7,6 @@ import {
   projectShipping,
   medianRealizedReturn,
   MIN_SAMPLE,
-  RETURN_LADDER,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
 import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
@@ -168,115 +167,110 @@ export default async function ShipTimingPage() {
       </Card>
 
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
-        <p className="mb-3 text-xs text-black/50 dark:text-white/50">
-          초음파 예상등급이 있는 개체만 표시합니다. 등급을 알아야 개체별 kg당 단가(그 등급의 지난주 시세)를
-          쓸 수 있고, 없으면 농장 평균이라 줄마다 같은 값이 반복됩니다.
-          <br />
-          <b>20~80% 열</b>은 그 수익률을 내려면 나와야 하는 도체중입니다 (투자비 × (1+수익률) ÷ kg당 단가).
-          {refWeight != null && (
-            <>
-              {" "}
-              <b>{Math.round(refWeight)}kg</b>(농장 {best?.ageMonths}개월 평균 도체중) 이하로 달성되는 눈금은
-              진하게 표시했습니다.
-            </>
-          )}
-          {medianReturn != null && (
-            <>
-              {" "}
-              참고로 지금까지 출하한 개체의 실현 수익률은 중앙값 <b>{Math.round(medianReturn)}%</b>입니다.
-            </>
-          )}
+        <p className="mb-4 text-xs text-black/50 dark:text-white/50">
+          초음파 예상등급이 있는 개체만 표시합니다. 큰 숫자는{" "}
+          <b>농장 {best?.ageMonths}개월 평균 도체중 {refWeight != null && `${Math.round(refWeight)}kg`}</b>로
+          나왔을 때의 수익률이고, 막대는 지금까지 출하한 개체의 중앙값
+          {medianReturn != null && <> <b>{Math.round(medianReturn)}%</b></>}와 견준 것입니다. 아래 줄은 그
+          수익률을 내려면 나와야 하는 도체중입니다.
         </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-black/60 dark:text-white/60">
-                <th className="pb-2 pr-4">관리번호</th>
-                <th className="pb-2 pr-4">현재 월령</th>
-                <th className="pb-2 pr-4">초음파 예상등급</th>
-                <th className="pb-2 pr-4">투자비</th>
-                <th className="pb-2 pr-4">kg당 단가</th>
-                {RETURN_LADDER.map((rate) => (
-                  <th key={rate} className="pb-2 pr-4 whitespace-nowrap">
-                    {Math.round(rate * 100)}%
-                  </th>
-                ))}
-                <th className="pb-2">권장</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scanned.map(({ cattle, latestScan, scanPrice, rec }) => (
-                <tr key={cattle.id} className="border-t border-black/5 dark:border-white/10">
-                  <td className="py-2 pr-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {scanned.map(({ cattle, latestScan, rec }) => {
+            const price = rec!.best!.expectedPricePerKg;
+            const invest = rec!.best!.totalInvestmentAtShip;
+            // 농장 평균 도체중으로 나왔을 때의 수익률 — 이 카드의 핵심 숫자
+            const expectedReturn =
+              refWeight != null && invest > 0 ? ((refWeight * price - invest) / invest) * 100 : null;
+            const aboveMedian = expectedReturn != null && medianReturn != null && expectedReturn >= medianReturn;
+
+            return (
+              <div
+                key={cattle.id}
+                className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/10"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
                     <Link
                       href={`/cattle/${cattle.id}`}
-                      className="font-mono font-semibold underline tabular-nums"
+                      className="font-mono text-lg font-bold underline tabular-nums"
                     >
                       {getManagementNumber(cattle.trace_no)}
                     </Link>
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {rec!.currentAgeMonths}개월
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap">
-                    {latestScan?.predicted_grade ? (
-                      <span className="tabular-nums">
-                        <span className="font-mono font-semibold">{latestScan.predicted_grade}</span>
-                        {latestScan.upgradable_grade && (
-                          <span className="ml-1 text-xs text-black/50 dark:text-white/50">
-                            →{latestScan.upgradable_grade}
-                          </span>
-                        )}
-                        {latestScan.back_fat_mm != null && (
-                          <span className="ml-1 text-xs text-black/40 dark:text-white/40">
-                            등지방 {latestScan.back_fat_mm}mm
-                          </span>
-                        )}
-                        {scanPrice == null && (
-                          <span className="ml-1 text-xs text-black/40 dark:text-white/40">(시세없음)</span>
-                        )}
+                    <span className="rounded bg-black px-1.5 py-1 font-mono text-[11px] leading-none font-semibold text-white dark:bg-white dark:text-black">
+                      {latestScan!.predicted_grade}
+                    </span>
+                    {latestScan!.upgradable_grade && (
+                      <span className="text-xs whitespace-nowrap text-black/50 dark:text-white/50">
+                        →{latestScan!.upgradable_grade}
                       </span>
-                    ) : (
-                      <span className="text-xs text-black/30 dark:text-white/30">-</span>
                     )}
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {formatKRW(rec!.best!.totalInvestmentAtShip)}
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {formatKRW(rec!.best!.expectedPricePerKg)}
-                  </td>
-                  {rec!.best!.targetWeights.map(({ rate, weight }) => {
-                    // 농장 평균 도체중으로 이미 달성되는 눈금은 진하게, 넘어서는 눈금은 흐리게
-                    const reachable = refWeight != null && weight <= refWeight;
-                    return (
-                      <td
-                        key={rate}
-                        className={`py-2 pr-4 whitespace-nowrap tabular-nums ${
-                          reachable ? "font-semibold" : "text-black/40 dark:text-white/40"
+                  </span>
+                  {rec!.best!.isPast ? (
+                    <span className="rounded bg-green-50 px-1.5 py-1 text-[11px] leading-none font-semibold whitespace-nowrap text-green-700 dark:bg-green-500/15 dark:text-green-300">
+                      출하 권장
+                    </span>
+                  ) : (
+                    <span className="text-xs whitespace-nowrap text-black/40 dark:text-white/40">사육 계속</span>
+                  )}
+                </div>
+
+                <div className="text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+                  {rec!.currentAgeMonths}개월
+                  {latestScan!.back_fat_mm != null && ` · 등지방 ${latestScan!.back_fat_mm}mm`}
+                  {` · kg당 ${formatKRW(price)}`}
+                  {` · 투자비 ${formatKRW(invest)}`}
+                </div>
+
+                {expectedReturn != null && (
+                  <div>
+                    <div className="flex items-baseline gap-2">
+                      <span
+                        className={`font-mono text-3xl font-bold tabular-nums ${
+                          aboveMedian ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"
                         }`}
                       >
+                        {Math.round(expectedReturn)}%
+                      </span>
+                      <span className="text-xs text-black/50 dark:text-white/50">
+                        {Math.round(refWeight!)}kg 나오면
+                      </span>
+                    </div>
+                    {/* 농장 중앙값과 견주는 막대 */}
+                    <div className="relative mt-1.5 h-2 overflow-hidden rounded bg-black/5 dark:bg-white/10">
+                      <div
+                        className={`h-full rounded ${aboveMedian ? "bg-green-500/70" : "bg-black/50 dark:bg-white/50"}`}
+                        style={{ width: `${Math.max(2, Math.min(100, (expectedReturn / 120) * 100))}%` }}
+                      />
+                      {medianReturn != null && (
+                        <div
+                          className="absolute top-0 h-full w-0.5 bg-black/60 dark:bg-white/60"
+                          style={{ left: `${Math.min(100, (medianReturn / 120) * 100)}%` }}
+                          title={`농장 중앙값 ${Math.round(medianReturn)}%`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-black/5 pt-2 text-xs tabular-nums dark:border-white/10">
+                  {rec!.best!.targetWeights.map(({ rate, weight }) => {
+                    const reachable = refWeight != null && weight <= refWeight;
+                    return (
+                      <span
+                        key={rate}
+                        className={`whitespace-nowrap ${
+                          reachable ? "font-semibold" : "text-black/35 dark:text-white/35"
+                        }`}
+                      >
+                        <span className="text-black/50 dark:text-white/50">{Math.round(rate * 100)}%</span>{" "}
                         {Math.round(weight)}kg
-                      </td>
+                      </span>
                     );
                   })}
-                  <td className="py-2 whitespace-nowrap">
-                    {rec!.overdue ? (
-                      <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] leading-none font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-300">
-                        적기 지남
-                      </span>
-                    ) : rec!.best!.isPast ? (
-                      <span className="rounded bg-green-50 px-1.5 py-0.5 text-[11px] leading-none font-semibold text-green-700 dark:bg-green-500/15 dark:text-green-300">
-                        출하 권장
-                      </span>
-                    ) : (
-                      <span className="text-xs text-black/40 dark:text-white/40">사육 계속</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </Card>
 
