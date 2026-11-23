@@ -15,6 +15,8 @@ export type ExplorerAnimal = {
   upgradableGrade: string | null;
   /** 출하 시점 예상 누적 투자비 */
   investment: number;
+  /** 입식일 ~ 예상 출하일. 연환산 수익률에 쓴다. 입식일이 없으면 null */
+  daysHeld: number | null;
   /** 농장 실적 기준 권장 월령을 이미 지났는지 */
   isPast: boolean;
 };
@@ -105,6 +107,11 @@ export function CarcassExplorer({
           const profit = price != null ? weight * price - a.investment : null;
           const returnPct =
             profit != null && a.investment > 0 ? (profit / a.investment) * 100 : null;
+          // 단순 수익률은 "투자한 돈 대비 얼마 남나", 연환산은 우방을 바로 다시 채울 때의 비교용.
+          const annualPct =
+            returnPct != null && a.daysHeld != null && a.daysHeld > 0
+              ? returnPct * (365 / a.daysHeld)
+              : null;
           const assumed = quality !== base.quality;
 
           return (
@@ -198,6 +205,7 @@ export function CarcassExplorer({
                       {returnPct != null && (
                         <span className="text-xs text-black/50 tabular-nums dark:text-white/50">
                           {Math.round(returnPct)}%
+                          {annualPct != null && ` (연 ${Math.round(annualPct)}%)`}
                         </span>
                       )}
                     </span>

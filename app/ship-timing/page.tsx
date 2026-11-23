@@ -69,6 +69,13 @@ export default async function ShipTimingPage() {
     upgradableGrade: latestScan!.upgradable_grade,
     investment: rec!.best!.totalInvestmentAtShip,
     isPast: rec!.best!.isPast,
+    // 투자비가 출하 시점 기준이므로 보유기간도 입식일 ~ 예상 출하일로 맞춘다.
+    daysHeld: cattle.intake_date
+      ? Math.round(
+          (new Date(rec!.best!.targetDate).getTime() - new Date(cattle.intake_date).getTime()) /
+            86_400_000
+        )
+      : null,
   }));
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
@@ -180,7 +187,9 @@ export default async function ShipTimingPage() {
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
           초음파 예상등급이 있는 개체만 표시합니다. 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐이고,
-          금액 옆 %는 투자비 대비 수익률입니다. 도체중은 슬라이더로 맞춰보실 수 있고, 육질등급은 더 비육하면
+          금액 옆 %는 <b>투자비 대비 수익률</b>, 괄호 안 <b>연 ○%</b>는 입식일부터 출하까지 걸린 기간으로 나눈
+          연환산입니다 (지금 개체들은 입식한 지 2년 가까워 대략 절반이 됩니다). 도체중은 슬라이더로 맞춰보실 수
+          있고, 육질등급은 더 비육하면
           올라갈 수 있으니 개체별로 바꿔볼 수 있게 했습니다. (육량등급은 거의 바뀌지 않으므로 초음파 측정값으로
           고정됩니다.)
           {refWeight != null && (
