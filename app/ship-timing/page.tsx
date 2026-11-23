@@ -17,6 +17,9 @@ function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
 }
 
+/** 도체중이 얼마 나오느냐에 따라 얼마가 남는지 보여줄 눈금 (kg). */
+const WEIGHT_LADDER = [450, 500, 550];
+
 /** 농가가 읽기 쉬운 만원 단위. 6,644,331 -> "664만원" */
 function manwon(v: number): string {
   const sign = v < 0 ? "-" : "";
@@ -63,11 +66,6 @@ export default async function ShipTimingPage() {
 
   // 기준점: 권장 월령의 농장 평균 도체중
   const refWeight = best?.avgCarcassWeight ?? null;
-  // 도체중이 얼마 나오느냐에 따라 남는 돈이 어떻게 달라지는지 보여줄 눈금.
-  // 농장 실제 출하 도체중이 328~677kg이라 그 안쪽으로 잡는다.
-  const weightLadder = Array.from(
-    new Set([450, refWeight != null ? Math.round(refWeight) : 520, 600])
-  ).sort((a, b) => a - b);
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -178,11 +176,12 @@ export default async function ShipTimingPage() {
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
           초음파 예상등급이 있는 개체만 표시합니다. 도체중이 얼마나 나올지는 미리 알 수 없으니,{" "}
-          <b>도체중별로 남는 돈</b>을 나열했습니다 — 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐입니다.
+          <b>도체중별로 남는 돈</b>을 나열했습니다 — 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐이고,
+          아래 %는 투자비 대비 수익률입니다.
           {refWeight != null && (
             <>
               {" "}
-              가운데 <b>{Math.round(refWeight)}kg</b>은 농장 {best?.ageMonths}개월 평균 도체중입니다.
+              참고로 농장 {best?.ageMonths}개월 평균 도체중은 <b>{Math.round(refWeight)}kg</b>입니다.
             </>
           )}{" "}
           kg당 단가는 초음파 예상등급의 지난주 음성공판장 시세입니다.
@@ -231,31 +230,30 @@ export default async function ShipTimingPage() {
 
                 {/* 도체중이 얼마 나오면 얼마 남는지 — 계산이 그대로 드러나게 */}
                 <div className="border-t border-black/5 pt-2 dark:border-white/10">
-                  <div className="mb-1 text-xs text-black/50 dark:text-white/50">
+                  <div className="mb-1.5 text-xs text-black/50 dark:text-white/50">
                     도체중이 이만큼 나오면 남는 돈
                   </div>
-                  <div className="flex items-end justify-between gap-2">
-                    {weightLadder.map((w) => {
+                  <div className="flex items-start justify-between gap-2">
+                    {WEIGHT_LADDER.map((w) => {
                       const profit = w * price - invest;
-                      const isRef = refWeight != null && w === Math.round(refWeight);
+                      const returnPct = invest > 0 ? (profit / invest) * 100 : null;
                       return (
                         <div key={w} className="flex flex-col items-center">
+                          <span className="text-[11px] whitespace-nowrap text-black/40 tabular-nums dark:text-white/40">
+                            {w}kg
+                          </span>
                           <span
-                            className={`font-mono font-semibold whitespace-nowrap tabular-nums ${
-                              isRef ? "text-xl" : "text-sm text-black/60 dark:text-white/60"
-                            } ${profit < 0 ? "text-red-600 dark:text-red-400" : ""}`}
+                            className={`font-mono text-base font-semibold whitespace-nowrap tabular-nums ${
+                              profit < 0 ? "text-red-600 dark:text-red-400" : ""
+                            }`}
                           >
                             {manwon(profit)}
                           </span>
-                          <span
-                            className={`mt-0.5 text-[11px] whitespace-nowrap tabular-nums ${
-                              isRef
-                                ? "font-semibold text-black/70 dark:text-white/70"
-                                : "text-black/40 dark:text-white/40"
-                            }`}
-                          >
-                            {w}kg{isRef && " 평균"}
-                          </span>
+                          {returnPct != null && (
+                            <span className="text-[11px] whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
+                              {Math.round(returnPct)}%
+                            </span>
+                          )}
                         </div>
                       );
                     })}
