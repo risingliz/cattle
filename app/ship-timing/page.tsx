@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { CarcassExplorer, type ExplorerAnimal } from "@/components/shipTiming/CarcassExplorer";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import {
   bestAgeByNetProfit,
@@ -9,21 +9,12 @@ import {
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
 import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
-import { formatKRW, formatPercent, getManagementNumber } from "@/lib/format";
+import { formatKRW, formatPercent } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
-}
-
-/** 도체중이 얼마 나오느냐에 따라 얼마가 남는지 보여줄 눈금 (kg). */
-const WEIGHT_LADDER = [450, 500, 550];
-
-/** 농가가 읽기 쉬운 만원 단위. 6,644,331 -> "664만원" */
-function manwon(v: number): string {
-  const sign = v < 0 ? "-" : "";
-  return `${sign}${Math.abs(Math.round(v / 10000)).toLocaleString("ko-KR")}만원`;
 }
 
 export default async function ShipTimingPage() {
@@ -66,6 +57,19 @@ export default async function ShipTimingPage() {
 
   // 기준점: 권장 월령의 농장 평균 도체중
   const refWeight = best?.avgCarcassWeight ?? null;
+
+  // 도체중 슬라이더 + 육질등급 전환은 클라이언트에서 다시 계산하므로, 등급별 시세를 그대로 넘긴다.
+  const explorerPrices: Record<string, number | null> = Object.fromEntries(gradePrices ?? []);
+  const explorerAnimals: ExplorerAnimal[] = scanned.map(({ cattle, latestScan, rec }) => ({
+    id: cattle.id,
+    traceNo: cattle.trace_no,
+    ageMonths: rec!.currentAgeMonths,
+    backFatMm: latestScan!.back_fat_mm,
+    scanGrade: latestScan!.predicted_grade!,
+    upgradableGrade: latestScan!.upgradable_grade,
+    investment: rec!.best!.totalInvestmentAtShip,
+    isPast: rec!.best!.isPast,
+  }));
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -175,94 +179,19 @@ export default async function ShipTimingPage() {
 
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
-          초음파 예상등급이 있는 개체만 표시합니다. 도체중이 얼마나 나올지는 미리 알 수 없으니,{" "}
-          <b>도체중별로 남는 돈</b>을 나열했습니다 — 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐이고,
-          아래 %는 투자비 대비 수익률입니다.
+          초음파 예상등급이 있는 개체만 표시합니다. 계산은 <code>도체중 × kg당 단가 − 투자비</code> 뿐이고,
+          금액 옆 %는 투자비 대비 수익률입니다. 도체중은 슬라이더로 맞춰보실 수 있고, 육질등급은 더 비육하면
+          올라갈 수 있으니 개체별로 바꿔볼 수 있게 했습니다. (육량등급은 거의 바뀌지 않으므로 초음파 측정값으로
+          고정됩니다.)
           {refWeight != null && (
             <>
               {" "}
               참고로 농장 {best?.ageMonths}개월 평균 도체중은 <b>{Math.round(refWeight)}kg</b>입니다.
             </>
           )}{" "}
-          kg당 단가는 초음파 예상등급의 지난주 음성공판장 시세입니다.
+          kg당 단가는 해당 등급의 지난주 음성공판장 시세입니다.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {scanned.map(({ cattle, latestScan, rec }) => {
-            const price = rec!.best!.expectedPricePerKg;
-            const invest = rec!.best!.totalInvestmentAtShip;
-
-            return (
-              <div
-                key={cattle.id}
-                className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 dark:border-white/10"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <Link
-                      href={`/cattle/${cattle.id}`}
-                      className="font-mono text-lg font-bold underline tabular-nums"
-                    >
-                      {getManagementNumber(cattle.trace_no)}
-                    </Link>
-                    <span className="rounded bg-black px-1.5 py-1 font-mono text-[11px] leading-none font-semibold text-white dark:bg-white dark:text-black">
-                      {latestScan!.predicted_grade}
-                    </span>
-                    {latestScan!.upgradable_grade && (
-                      <span className="text-xs whitespace-nowrap text-black/50 dark:text-white/50">
-                        →{latestScan!.upgradable_grade}
-                      </span>
-                    )}
-                  </span>
-                  {rec!.best!.isPast ? (
-                    <span className="rounded bg-green-50 px-1.5 py-1 text-[11px] leading-none font-semibold whitespace-nowrap text-green-700 dark:bg-green-500/15 dark:text-green-300">
-                      출하 권장
-                    </span>
-                  ) : (
-                    <span className="text-xs whitespace-nowrap text-black/40 dark:text-white/40">사육 계속</span>
-                  )}
-                </div>
-
-                <div className="text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
-                  {rec!.currentAgeMonths}개월
-                  {latestScan!.back_fat_mm != null && ` · 등지방 ${latestScan!.back_fat_mm}mm`}
-                  {` · kg당 ${formatKRW(price)} · 투자비 ${formatKRW(invest)}`}
-                </div>
-
-                {/* 도체중이 얼마 나오면 얼마 남는지 — 계산이 그대로 드러나게 */}
-                <div className="border-t border-black/5 pt-2 dark:border-white/10">
-                  <div className="mb-1.5 text-xs text-black/50 dark:text-white/50">
-                    도체중이 이만큼 나오면 남는 돈
-                  </div>
-                  <div className="flex items-start justify-between gap-2">
-                    {WEIGHT_LADDER.map((w) => {
-                      const profit = w * price - invest;
-                      const returnPct = invest > 0 ? (profit / invest) * 100 : null;
-                      return (
-                        <div key={w} className="flex flex-col items-center">
-                          <span className="text-[11px] whitespace-nowrap text-black/40 tabular-nums dark:text-white/40">
-                            {w}kg
-                          </span>
-                          <span
-                            className={`font-mono text-base font-semibold whitespace-nowrap tabular-nums ${
-                              profit < 0 ? "text-red-600 dark:text-red-400" : ""
-                            }`}
-                          >
-                            {manwon(profit)}
-                          </span>
-                          {returnPct != null && (
-                            <span className="text-[11px] whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
-                              {Math.round(returnPct)}%
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <CarcassExplorer animals={explorerAnimals} prices={explorerPrices} />
       </Card>
 
       <p className="text-xs text-black/50 dark:text-white/50">
