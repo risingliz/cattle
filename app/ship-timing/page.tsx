@@ -5,8 +5,9 @@ import {
   bestAgeByNetProfit,
   buildAgePerformance,
   projectShipping,
+  medianRealizedReturn,
   MIN_SAMPLE,
-  TARGET_RETURN_RATE,
+  RETURN_LADDER,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
 import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
@@ -55,6 +56,10 @@ export default async function ShipTimingPage() {
   // 초음파 예상등급이 있어야 개체별 단가를 쓸 수 있다. 없는 개체는 농장 평균밖에 못 써서 줄마다
   // 같은 값이 반복되므로 표에서 제외한다.
   const scanned = active.filter((a) => a.latestScan?.predicted_grade);
+
+  // 눈금을 읽는 기준점: 권장 월령의 농장 평균 도체중, 그리고 실현 수익률 중앙값
+  const refWeight = best?.avgCarcassWeight ?? null;
+  const medianReturn = medianRealizedReturn(items);
 
   const overdueCount = active.filter((a) => a.rec!.overdue).length;
 
@@ -167,16 +172,20 @@ export default async function ShipTimingPage() {
           초음파 예상등급이 있는 개체만 표시합니다. 등급을 알아야 개체별 kg당 단가(그 등급의 지난주 시세)를
           쓸 수 있고, 없으면 농장 평균이라 줄마다 같은 값이 반복됩니다.
           <br />
-          <b>{Math.round(TARGET_RETURN_RATE * 100)}% 도체중</b> = 투자비 × {1 + TARGET_RETURN_RATE} ÷ kg당 단가.
-          이만큼 나오면 투자비 대비 {Math.round(TARGET_RETURN_RATE * 100)}%가 남습니다
-          {best && (
+          <b>20~80% 열</b>은 그 수익률을 내려면 나와야 하는 도체중입니다 (투자비 × (1+수익률) ÷ kg당 단가).
+          {refWeight != null && (
             <>
               {" "}
-              (농장 {best.ageMonths}개월 평균 도체중 <b>{Math.round(best.avgCarcassWeight)}kg</b>)
+              <b>{Math.round(refWeight)}kg</b>(농장 {best?.ageMonths}개월 평균 도체중) 이하로 달성되는 눈금은
+              진하게 표시했습니다.
             </>
           )}
-          . <b>본전 증체</b> = 한 달 사료비 ÷ kg당 단가로, 옆의 <b>농장 실적 증체</b>보다 크면 더 키우는 게
-          손해입니다.
+          {medianReturn != null && (
+            <>
+              {" "}
+              참고로 지금까지 출하한 개체의 실현 수익률은 중앙값 <b>{Math.round(medianReturn)}%</b>입니다.
+            </>
+          )}
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -187,9 +196,11 @@ export default async function ShipTimingPage() {
                 <th className="pb-2 pr-4">초음파 예상등급</th>
                 <th className="pb-2 pr-4">투자비</th>
                 <th className="pb-2 pr-4">kg당 단가</th>
-                <th className="pb-2 pr-4">{Math.round(TARGET_RETURN_RATE * 100)}% 도체중</th>
-                <th className="pb-2 pr-4">본전 증체</th>
-                <th className="pb-2 pr-4">농장 실적 증체</th>
+                {RETURN_LADDER.map((rate) => (
+                  <th key={rate} className="pb-2 pr-4 whitespace-nowrap">
+                    {Math.round(rate * 100)}%
+                  </th>
+                ))}
                 <th className="pb-2">권장</th>
               </tr>
             </thead>
@@ -235,28 +246,20 @@ export default async function ShipTimingPage() {
                   <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
                     {formatKRW(rec!.best!.expectedPricePerKg)}
                   </td>
-                  <td className="py-2 pr-4 font-semibold whitespace-nowrap tabular-nums">
-                    {Math.round(rec!.best!.targetWeightAtReturn)}kg
-                  </td>
-                  <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                    {rec!.marginal ? `+${rec!.marginal.requiredGainKg.toFixed(1)}kg` : "-"}
-                  </td>
-                  <td className="py-2 pr-4 font-semibold whitespace-nowrap tabular-nums">
-                    {rec!.marginal?.farmGainKg != null ? (
-                      <span className={rec!.marginal.worthIt ? "" : "text-red-600 dark:text-red-400"}>
-                        {rec!.marginal.farmGainKg >= 0 ? "+" : ""}
-                        {rec!.marginal.farmGainKg.toFixed(0)}kg
-                        {rec!.marginal.farmPriceChangePerKg != null && (
-                          <span className="ml-1 text-xs font-normal text-black/40 dark:text-white/40">
-                            단가 {rec!.marginal.farmPriceChangePerKg >= 0 ? "+" : ""}
-                            {Math.round(rec!.marginal.farmPriceChangePerKg).toLocaleString()}원
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="text-xs font-normal text-black/30 dark:text-white/30">실적 없음</span>
-                    )}
-                  </td>
+                  {rec!.best!.targetWeights.map(({ rate, weight }) => {
+                    // 농장 평균 도체중으로 이미 달성되는 눈금은 진하게, 넘어서는 눈금은 흐리게
+                    const reachable = refWeight != null && weight <= refWeight;
+                    return (
+                      <td
+                        key={rate}
+                        className={`py-2 pr-4 whitespace-nowrap tabular-nums ${
+                          reachable ? "font-semibold" : "text-black/40 dark:text-white/40"
+                        }`}
+                      >
+                        {Math.round(weight)}kg
+                      </td>
+                    );
+                  })}
                   <td className="py-2 whitespace-nowrap">
                     {rec!.overdue ? (
                       <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] leading-none font-semibold text-red-700 dark:bg-red-500/15 dark:text-red-300">

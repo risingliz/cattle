@@ -5,8 +5,23 @@ import type { Cattle, FeedCostPeriod } from "./types";
 /** 월령별 통계를 신뢰하고 쓰기 위한 최소 표본 두수. */
 export const MIN_SAMPLE = 3;
 
-/** 목표 수익률. 순수익 ÷ 투자비 기준. */
-export const TARGET_RETURN_RATE = 0.25;
+/**
+ * 목표 수익률 눈금 (순수익 ÷ 투자비 기준, 연환산 아님).
+ * 농장 실현 수익률이 중앙값 47% · 평균 50% 라 그 범위를 사이에 두도록 잡았다.
+ */
+export const RETURN_LADDER = [0.2, 0.4, 0.6, 0.8] as const;
+
+/** 출하완료 개체들의 실현 수익률 중앙값 (%). 눈금을 읽을 때의 기준점. */
+export function medianRealizedReturn(items: CattleWithSummary[]): number | null {
+  const rates: number[] = [];
+  for (const { summary } of items) {
+    if (!summary || summary.netProfit == null || summary.totalInvestment <= 0) continue;
+    rates.push((summary.netProfit / summary.totalInvestment) * 100);
+  }
+  if (!rates.length) return null;
+  rates.sort((a, b) => a - b);
+  return rates[Math.floor((rates.length - 1) / 2)];
+}
 
 export interface AgeStat {
   ageMonths: number;
@@ -95,11 +110,10 @@ export interface ShipProjection {
    */
   breakEvenWeight: number;
   /**
-   * 목표 수익률(TARGET_RETURN_RATE)을 내려면 나와야 하는 도체중.
-   * = 투자비 × (1 + 목표수익률) ÷ kg당 단가.
-   * 손익분기는 300kg대라 항상 통과돼 판단에 쓸모가 없어서, 실제로 겨냥하는 선을 쓴다.
+   * 목표 수익률별로 나와야 하는 도체중. = 투자비 × (1 + 수익률) ÷ kg당 단가.
+   * 손익분기(300kg대)는 항상 통과돼 판단에 쓸모가 없으므로 수익률 눈금으로 보여준다.
    */
-  targetWeightAtReturn: number;
+  targetWeights: { rate: number; weight: number }[];
   expectedNetProfit: number;
   sampleCount: number;
   isPast: boolean;
@@ -194,8 +208,10 @@ export function projectShipping(
       additionalFeedCost,
       totalInvestmentAtShip,
       breakEvenWeight: pricePerKg > 0 ? totalInvestmentAtShip / pricePerKg : 0,
-      targetWeightAtReturn:
-        pricePerKg > 0 ? (totalInvestmentAtShip * (1 + TARGET_RETURN_RATE)) / pricePerKg : 0,
+      targetWeights: RETURN_LADDER.map((rate) => ({
+        rate,
+        weight: pricePerKg > 0 ? (totalInvestmentAtShip * (1 + rate)) / pricePerKg : 0,
+      })),
       expectedNetProfit: expectedSale - totalInvestmentAtShip,
       sampleCount: stat.count,
       isPast,
