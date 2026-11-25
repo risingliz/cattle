@@ -174,6 +174,44 @@ export async function fetchAllGradePricesPerKg(
   return result;
 }
 
+export interface GradeDetailPrice {
+  pricePerKg: number | null;
+  /** 해당 구간 음성공판장 경매 두수 */
+  count: number | null;
+}
+
+/**
+ * 1++ 등급을 근내지방도(bmsNo 7/8/9)까지 세분한 음성공판장 평균 낙찰가를 한 번의 요청으로 조회한다.
+ * 같은 1++B라도 BMS 7과 9는 kg당 3천원 이상 벌어지므로, 등급 평균만으로는 내 소 값을 가늠하기 어렵다.
+ * 키는 "1++B:8" 형식이며, 거래가 없는 조합은 아예 담기지 않는다.
+ */
+export async function fetchAllGradeDetailPricesPerKg(
+  start: Date,
+  end: Date
+): Promise<Map<string, GradeDetailPrice>> {
+  const serviceKey = requireServiceKey();
+  const url = `${BASE_URL}/cattleDetail?serviceKey=${serviceKey}&startYmd=${ymd(start)}&endYmd=${ymd(end)}&breedCd=${BREED_CD}&sexCd=${SEX_CD}&qgradeYn=N&defectIncludeYn=N`;
+
+  const parsed = await fetchXml(url);
+  assertSuccess(parsed, "음성공판장 근내지방도별 평균가 조회 실패");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items: any[] = parsed?.response?.body?.items?.item ?? [];
+
+  const result = new Map<string, GradeDetailPrice>();
+  for (const it of items) {
+    const grade = typeof it.gradeNm === "string" ? it.gradeNm.trim() : null;
+    if (!grade || it.bmsNo == null) continue;
+    const price = it.c_0513Amt != null ? Number(it.c_0513Amt) : NaN;
+    const count = it.c_0513Cnt != null ? Number(it.c_0513Cnt) : NaN;
+    result.set(`${grade}:${it.bmsNo}`, {
+      pricePerKg: Number.isFinite(price) ? price : null,
+      count: Number.isFinite(count) ? count : null,
+    });
+  }
+  return result;
+}
+
 /**
  * 음성공판장 등급 단일 평균 낙찰가(원/kg)를 조회한다 (근내지방도 세분화 없이, cattle 엔드포인트만 사용).
  * 시세 추이처럼 특정 개체가 아니라 등급 자체의 시장 참고가를 볼 때 사용한다.
@@ -273,15 +311,21 @@ export async function fetchWeeklyGradePriceHistory(
   gradeNm: string,
   weeksBack: number,
   referenceDate: Date,
-  includeCurrentWeek = false
+  includeCurrentWeek = false,
+  /** 주면 그 근내지방도(BMS)만 추적한다. 등급 평균은 BMS 구성비에 따라 흔들리므로 추이용으로는 고정하는 편이 낫다. */
+  bmsNo: number | null = null
 ): Promise<WeeklyGradePrice[]> {
   const weekOffsets = Array.from({ length: weeksBack }, (_, i) => weeksBack - 1 - i);
+  const fetchOne = (start: Date, end: Date) =>
+    bmsNo != null
+      ? fetchEumseongGradePricePerKg(gradeNm, bmsNo, start, end)
+      : fetchGradeAveragePricePerKg(gradeNm, start, end);
 
   const results = await mapWithConcurrency(weekOffsets, HISTORY_FETCH_CONCURRENCY, async (weeksAgo) => {
     const { start, end } = getTueFriForWeeksAgo(referenceDate, weeksAgo);
     let pricePerKg: number | null = null;
     try {
-      pricePerKg = await fetchGradeAveragePricePerKg(gradeNm, start, end);
+      pricePerKg = await fetchOne(start, end);
     } catch {
       pricePerKg = null;
     }
@@ -300,7 +344,7 @@ export async function fetchWeeklyGradePriceHistory(
 
   let partialPrice: number | null = null;
   try {
-    partialPrice = await fetchGradeAveragePricePerKg(gradeNm, partial.start, partial.end);
+    partialPrice = await fetchOne(partial.start, partial.end);
   } catch {
     partialPrice = null;
   }

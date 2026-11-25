@@ -1,4 +1,6 @@
 import { Card } from "@/components/ui/Card";
+import { CaptureCard } from "@/components/ui/CaptureCard";
+import { todayStamp } from "@/lib/capture";
 import { CarcassExplorer, type ExplorerAnimal } from "@/components/shipTiming/CarcassExplorer";
 import { getAllCattleWithProfitability } from "@/lib/queries";
 import {
@@ -12,6 +14,9 @@ import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-a
 import { formatKRW, formatPercent } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
+
+/** 저장한 이미지 아래에 붙는 출처 */
+const CAPTION = "출처: 농장 출하 실적 + 축산물품질평가원 음성공판장 시세";
 
 function pct(v: number): string {
   return `${Math.round(v * 100)}%`;
@@ -82,7 +87,11 @@ export default async function ShipTimingPage() {
       <h1 className="text-lg font-semibold">출하 적기</h1>
 
       {best ? (
-        <Card title="농장 실적 기준 권장 출하 월령">
+        <CaptureCard
+          title="농장 실적 기준 권장 출하 월령"
+          fileName={`권장출하월령_${todayStamp()}`}
+          caption={CAPTION}
+        >
           <p className="text-4xl font-semibold">
             {best.ageMonths}개월
             <span className="ml-2 text-base font-normal text-black/50 dark:text-white/50">
@@ -99,7 +108,7 @@ export default async function ShipTimingPage() {
               이미 이 시점을 지났습니다.
             </p>
           )}
-        </Card>
+        </CaptureCard>
       ) : (
         <Card>
           <p className="text-sm text-black/60 dark:text-white/60">
@@ -108,7 +117,11 @@ export default async function ShipTimingPage() {
         </Card>
       )}
 
-      <Card title="출하월령별 실적">
+      <CaptureCard
+        title="출하월령별 실적"
+        fileName={`출하월령별실적_${todayStamp()}`}
+        caption={CAPTION}
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -179,7 +192,7 @@ export default async function ShipTimingPage() {
           낮아 남은 개체&quot;일 수 있습니다. 사육중 개체의 유전등급과 실제 출하등급이 쌓이면 이 구분이
           가능해집니다.
         </p>
-      </Card>
+      </CaptureCard>
 
       <Card title={`초음파 측정 개체 (${scanned.length}두 / 사육중 ${active.length}두)`}>
         <p className="mb-4 text-xs text-black/50 dark:text-white/50">
