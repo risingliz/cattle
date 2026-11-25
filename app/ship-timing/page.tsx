@@ -10,7 +10,12 @@ import {
   MIN_SAMPLE,
 } from "@/lib/shipTiming";
 import { calcMonthsBetween } from "@/lib/calculations";
-import { fetchAllGradePricesPerKg, getTueFriForWeeksAgo } from "@/lib/eumseong-api";
+import {
+  fetchAllGradeDetailPricesPerKg,
+  fetchAllGradePricesPerKg,
+  getTueFriForWeeksAgo,
+} from "@/lib/eumseong-api";
+import { resolveGradePrice, type GradePriceTable } from "@/lib/gradePrice";
 import { formatKRW, formatPercent } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +31,19 @@ export default async function ShipTimingPage() {
   const today = new Date();
   const lastWeek = getTueFriForWeeksAgo(today, 0);
 
-  const [{ items, feedCostPeriods }, gradePrices] = await Promise.all([
+  const [{ items, feedCostPeriods }, gradePrices, gradeDetailPrices] = await Promise.all([
     getAllCattleWithProfitability(),
     fetchAllGradePricesPerKg(lastWeek.start, lastWeek.end).catch(() => null),
+    fetchAllGradeDetailPricesPerKg(lastWeek.start, lastWeek.end).catch(() => null),
   ]);
+
+  // 1++ 는 등급 평균이 BMS 9 쪽으로 끌려 올라가 있어서, 개체 근내지방도에 맞는 단가를 쓴다.
+  const priceTable: GradePriceTable = {
+    average: Object.fromEntries(gradePrices ?? []),
+    byBms: Object.fromEntries(
+      [...(gradeDetailPrices ?? [])].map(([key, v]) => [key, v.pricePerKg])
+    ),
+  };
 
   const stats = buildAgePerformance(items);
   const best = bestAgeByNetProfit(stats);
@@ -41,7 +55,9 @@ export default async function ShipTimingPage() {
     .filter(({ cattle }) => cattle.status === "사육중" && cattle.birth_date)
     .map(({ cattle, summary, latestScan }) => {
       const scanGrade = latestScan?.predicted_grade ?? null;
-      const scanPrice = scanGrade ? (gradePrices?.get(scanGrade) ?? null) : null;
+      const scanPrice = scanGrade
+        ? resolveGradePrice(priceTable, scanGrade, latestScan?.bms ?? null).pricePerKg
+        : null;
       return {
         cattle,
         summary,
@@ -64,13 +80,13 @@ export default async function ShipTimingPage() {
   const refWeight = best?.avgCarcassWeight ?? null;
 
   // 도체중 슬라이더 + 육질등급 전환은 클라이언트에서 다시 계산하므로, 등급별 시세를 그대로 넘긴다.
-  const explorerPrices: Record<string, number | null> = Object.fromEntries(gradePrices ?? []);
   const explorerAnimals: ExplorerAnimal[] = scanned.map(({ cattle, summary, latestScan, rec }) => ({
     id: cattle.id,
     traceNo: cattle.trace_no,
     ageMonths: rec!.currentAgeMonths,
     backFatMm: latestScan!.back_fat_mm,
     scanGrade: latestScan!.predicted_grade!,
+    scanBms: latestScan!.bms,
     upgradableGrade: latestScan!.upgradable_grade,
     // 카드 전체를 "오늘 출하한다면" 기준으로 맞춘다. kg당 단가는 지난주 시세이고 육질등급도
     // 지금 측정값이므로, 투자비와 보유기간만 미래(예상 출하일)로 잡으면 기준이 섞인다.
@@ -209,9 +225,12 @@ export default async function ShipTimingPage() {
               참고로 농장 {best?.ageMonths}개월 평균 도체중은 <b>{Math.round(refWeight)}kg</b>입니다.
             </>
           )}{" "}
-          kg당 단가는 해당 등급의 지난주 음성공판장 시세입니다.
+          kg당 단가는 해당 등급의 지난주 음성공판장 시세이고, <b>1++ 는 등급 평균이 아니라
+          근내지방도(BMS)별 단가</b>를 씁니다. 공판장 1++ 는 BMS 9가 가장 많아 등급 평균이 kg당
+          1,000원 이상 높게 잡히기 때문입니다. 초음파 BMS가 7~9면 그 값을, 모르거나 그보다 낮으면
+          BMS 8 단가를 씁니다.
         </p>
-        <CarcassExplorer animals={explorerAnimals} prices={explorerPrices} />
+        <CarcassExplorer animals={explorerAnimals} prices={priceTable} />
       </Card>
 
       <p className="text-xs text-black/50 dark:text-white/50">

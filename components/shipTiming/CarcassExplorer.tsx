@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { formatKRW, getManagementNumber } from "@/lib/format";
+import {
+  DEFAULT_PLUS_PLUS_BMS,
+  resolveGradePrice,
+  type GradePriceTable,
+} from "@/lib/gradePrice";
 
 export type ExplorerAnimal = {
   id: string;
@@ -11,6 +16,8 @@ export type ExplorerAnimal = {
   backFatMm: number | null;
   /** 초음파로 측정된 예상 등급 (예: "1++C") */
   scanGrade: string;
+  /** 초음파 근내지방도(BMS 1~9). 1++ 단가를 고를 때 쓴다 */
+  scanBms: number | null;
   /** 더 비육했을 때 도달 가능하다고 본 상향 등급 */
   upgradableGrade: string | null;
   /** 출하 시점 예상 누적 투자비 */
@@ -65,8 +72,8 @@ export function CarcassExplorer({
   prices,
 }: {
   animals: ExplorerAnimal[];
-  /** 등급명 -> kg당 지난주 음성공판장 시세 */
-  prices: Record<string, number | null>;
+  /** 지난주 음성공판장 시세. 1++ 는 근내지방도별 단가를 같이 담고 있다 */
+  prices: GradePriceTable;
 }) {
   const [weight, setWeight] = useState(DEFAULT_WEIGHT);
   // 개체별 육질등급 가정. 비어 있으면 초음파 측정 등급을 쓴다.
@@ -103,7 +110,8 @@ export function CarcassExplorer({
           const base = splitGrade(a.scanGrade);
           const quality = qualityById[a.id] ?? base.quality;
           const grade = base.yieldGrade ? `${quality}${base.yieldGrade}` : quality;
-          const price = prices[grade] ?? null;
+          const resolved = resolveGradePrice(prices, grade, a.scanBms);
+          const price = resolved.pricePerKg;
           const profit = price != null ? weight * price - a.investment : null;
           const returnPct =
             profit != null && a.investment > 0 ? (profit / a.investment) * 100 : null;
@@ -160,7 +168,8 @@ export function CarcassExplorer({
                   {QUALITY_OPTIONS.map((opt) => {
                     const optGrade = base.yieldGrade ? `${opt}${base.yieldGrade}` : opt;
                     const selected = opt === quality;
-                    const hasPrice = prices[optGrade] != null;
+                    const hasPrice =
+                      resolveGradePrice(prices, optGrade, a.scanBms).pricePerKg != null;
                     return (
                       <button
                         key={opt}
@@ -192,7 +201,8 @@ export function CarcassExplorer({
                 {profit != null ? (
                   <>
                     <span className="text-xs whitespace-nowrap text-black/50 tabular-nums dark:text-white/50">
-                      {grade} kg당 {formatKRW(price)}
+                      {grade}
+                      {resolved.bms != null && ` BMS${resolved.bms}`} kg당 {formatKRW(price)}
                     </span>
                     <span className="flex items-baseline gap-1.5 whitespace-nowrap">
                       <span
@@ -217,9 +227,12 @@ export function CarcassExplorer({
                 )}
               </div>
 
-              {assumed && (
+              {(assumed || resolved.assumedBms) && (
                 <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  초음파 측정은 {a.scanGrade}입니다. {grade}은 가정값입니다.
+                  {assumed && `초음파 측정은 ${a.scanGrade}입니다. ${grade}은 가정값입니다.`}
+                  {assumed && resolved.assumedBms && " "}
+                  {resolved.assumedBms &&
+                    `근내지방도는 BMS ${DEFAULT_PLUS_PLUS_BMS} 기준 단가입니다.`}
                 </p>
               )}
             </div>
